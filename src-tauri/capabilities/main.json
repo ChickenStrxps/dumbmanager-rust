@@ -1,0 +1,18 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main",
+  "description": "Bundled local UI in the main window may call the DumbManager Rust commands, and nothing else. No remote origins, no core/plugin APIs.",
+  "local": true,
+  "windows": ["main"],
+  "permissions": [
+    "allow-app-snapshot",
+    "allow-itch-list",
+    "allow-itch-save",
+    "allow-itch-transition",
+    "allow-settings-get",
+    "allow-settings-save",
+    "allow-card-export",
+    "allow-open-export-folder",
+    "allow-legacy-api"
+  ]
+}

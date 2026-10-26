@@ -1,0 +1,19 @@
+[package]
+name = "dumbmanager-card-renderer"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.87"
+license = "MIT"
+description = "Bounded native ASCII card renderer for DumbManager Rust"
+
+[dependencies]
+font8x8 = "0.3.1"
+gif = "0.14.2"
+png = "0.18"
+
+[dev-dependencies]
+tempfile = "3"
+
+[[example]]
+name = "render"
+path = "examples/render.rs"

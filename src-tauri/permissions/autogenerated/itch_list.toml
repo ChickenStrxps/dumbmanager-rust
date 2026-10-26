@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-itch-list"
+description = "Enables the itch_list command without any pre-configured scope."
+commands.allow = ["itch_list"]
+
+[[permission]]
+identifier = "deny-itch-list"
+description = "Denies the itch_list command without any pre-configured scope."
+commands.deny = ["itch_list"]

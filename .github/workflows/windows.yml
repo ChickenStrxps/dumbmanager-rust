@@ -1,0 +1,69 @@
+name: Windows desktop
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            src-tauri -> target
+            crates/card-renderer -> target
+      - name: Install build CLI
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Check frontend syntax
+        run: npm run check:ui
+      - name: Check source boundaries
+        run: python tools/check-source.py
+      - name: Test domain and desktop commands
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml -p dumbmanager-core -p dumbmanager-rust --all-targets --features desktop-qa
+      - name: Test real image exports
+        run: cargo test --locked --manifest-path crates/card-renderer/Cargo.toml
+      - name: Check Rust warnings
+        run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+      - name: Check Rust formatting
+        run: |
+          cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+          cargo fmt --manifest-path src-tauri/core/Cargo.toml -- --check
+          cargo fmt --manifest-path crates/card-renderer/Cargo.toml -- --check
+      - name: Collect license notices
+        run: python tools/generate-notices.py
+      - name: Build Windows application and installer
+        run: npm run build -- --bundles nsis
+      - name: Package clean tracked source
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path artifacts -Force | Out-Null
+          git archive --format=zip --output=artifacts/DumbManager-Rust-source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DumbManager-Rust-Windows
+          if-no-files-found: error
+          path: |
+            src-tauri/target/release/dumbmanager-rust.exe
+            src-tauri/target/release/bundle/nsis/*-setup.exe
+            artifacts/DumbManager-Rust-source.zip
+            LICENSE
+            THIRD_PARTY_NOTICES.txt

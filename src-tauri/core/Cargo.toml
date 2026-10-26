@@ -1,0 +1,17 @@
+[package]
+name = "dumbmanager-core"
+version = "0.1.0"
+description = "Headless domain logic for DumbManager Rust: itches, settings and safe exports. No Tauri dependency."
+edition = "2021"
+rust-version = "1.85"
+publish = false
+
+[dependencies]
+rusqlite = { version = "0.40", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+uuid = { version = "1", features = ["v4"] }
+
+# No dev-dependencies on purpose: `cargo test -p dumbmanager-core` must work
+# from src-tauri without a Cargo [workspace] table (see docs/backend-notes.md).

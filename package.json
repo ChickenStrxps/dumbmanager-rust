@@ -1,0 +1,14 @@
+{
+  "name": "dumbmanager-rust",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Isolated Rust desktop companion for DumbManager",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "check:ui": "node tools/check-ui.mjs"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  }
+}
