@@ -28,11 +28,15 @@ background, accent and muted colors are `#060608`, `#ff5cc8` and `#8d8a9e`.
 
 ## Windows identity
 
-The independent Windows icon is a magenta and cyan fish. Its ICO contains
-16, 20, 24, 32, 40, 48, 64, 128 and 256 pixel entries. Small sizes use a clear
-silhouette; larger sizes include fine ASCII texture. The native title bar,
-taskbar and executable resource were inspected in the earlier shell build.
-That shell check is separate from verification of the restored frontend.
+The independent Windows icon is generated in 16, 20, 24, 32, 40, 48, 64, 128
+and 256 pixel ICO entries, with a separate 512 pixel PNG master. Small sizes
+prioritize a clear structural mark; larger sizes integrate fine ASCII detail.
+The icon design and asset checks are recorded in `icon-design.md`. Windows
+shell checks are separate from verification of the restored frontend.
+The updated DM icon was checked in the installed title bar, real taskbar and
+small and large Explorer views. Windows initially retained the previous taskbar
+image; refreshing its cache and the Rust shortcut's explicit icon, then
+reopening the app, displayed the new mark. The application identity was retained.
 
 ## Native review
 
