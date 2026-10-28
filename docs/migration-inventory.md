@@ -28,17 +28,20 @@ No listener, global shortcut or capture starts automatically.
   explicit destinations, Mercury/Jev assistance, retained research, confirmed
   T3 handoffs and original ASCII cards. See `services-discord.md` for limits.
 - Explicitly enabled global shortcuts, screen-region snipping into local evidence,
-  and user-facing shortcut diagnostics. The selector passes compiler checks and
-  cancellation checks; a successful region capture still needs UI verification.
+  identity-bound selected-window replay, and user-facing shortcut diagnostics.
+  Disposable real Windows fixtures verified occluded-window frames, close/disarm,
+  stale selection rejection and a completed region snip.
 
 ## Still required before full replacement
 
-- Selected-window replay capture and final snipping UI verification.
 - Integrated Discord HTTP routing and live registration/delivery verification.
 - Captured X still needs an explicitly configured source; the original public
   RSS/TypeSafe feeds and evidence-linked Learning topic guides are implemented.
-- Reconcile the original capability inventory against the native registry.
-- Final native UI, installer, microphone, clipboard-paste and real FFmpeg checks.
+- Literal frontend capability routing is reconciled in `capability-inventory.md`;
+  that source audit does not establish every original runtime behavior.
+- Native capture/edit/evidence/review/reload checks passed in a hidden WebView.
+  Final installer inspection, live microphone and clipboard-paste checks remain.
+  Real FFmpeg conversion passed with synthetic video.
 - Independent review and user visual review of the integrated release candidate.
 
 Configured adapters have primarily been checked with isolated local fixtures;

@@ -25,11 +25,13 @@ MCP clients use the separate `dumbmanager-mcp.exe` console program.
 - Configurable T3 connections, project registration, chat and itch handoffs.
 - Configurable Mercury suggestions, Jev judgments, research and inspiration.
 - Isolated Browse sessions and Git operations on registered folders.
+- Opt-in screen-region snips and bounded selected-window replay.
 - Optional voice adapters, scoped stdio MCP and a paired phone connection.
 
 External services start unconfigured and use your own credentials. Provider,
-phone and external-client compatibility still need live checks. Desktop snipping,
-selected-window replay and integrated Discord delivery verification remain unfinished.
+phone and external-client compatibility still need live checks. Desktop snipping
+and selected-window replay are implemented and checked with synthetic windows;
+live Discord delivery and Windows clipboard paste remain unverified.
 No successful connection or operation is simulated.
 
 ## Build from source

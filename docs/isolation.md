@@ -11,13 +11,13 @@ This application does not install over the Python edition.
 | Database, settings, exports | Inside the Rust edition's directory |
 | WebView profile | Separate profile belonging to the Rust edition |
 | Runtime | Rust + Windows WebView2; no Python process |
-| Network listener | None |
+| Network listener | Off by default; explicit optional phone/Discord listener |
 | External accounts | No automatic credential discovery or connection |
 | Startup | No startup task or service installed |
 
 No old database, connections, browser profile, tokens, hotkeys, mobile invitation
 or T3 selection is imported by opening the app. There is no side effect on the
-current application or its GitHub repository. Tests and benchmarks use disposable
+current application or its GitHub repository. Development verification uses disposable
 state. A layout preview server is optional developer tooling and binds only to
 loopback; the packaged application does not need it.
 

@@ -68,3 +68,18 @@ The installed executable matches the release executable except for Tauri's
 documented bundle marker (`UNK` becomes `NSS` for NSIS). The installed license
 and dependency notices match the source files byte for byte. The separate
 Start menu shortcut remains present. No original installation was upgraded.
+
+## Integrated native verification
+
+The later hidden Tauri verification build shared the production frontend, native
+commands/services, CSP and ACL, with a separate temporary identity/profile. It
+passed actual capture/edit/review and exact PNG upload/read round trips, domain
+conflict handling without an outbox entry, native settings, and SQLite persistence
+after reload. Its screenshots show real WebView2 output, not browser API mocks.
+The window remained hidden/unfocused; DOM-driven checks moved no system cursor.
+The harness, reports and stills stay outside the source and installer.
+
+This establishes the checked local flows only. File-picker interaction, shell
+clipboard paste, live accounts/audio and every provider flow were not verified
+by the hidden WebView check. User visual approval remains separate from these
+mechanical checks. The accepted icon assets are unchanged by the service work.

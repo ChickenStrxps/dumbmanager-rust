@@ -2,8 +2,7 @@
   "bundle": {
     "resources": {
       "../LICENSE": "LICENSE",
-      "../THIRD_PARTY_NOTICES.txt": "THIRD_PARTY_NOTICES.txt",
-      "target/release/dumbmanager-mcp.exe": "dumbmanager-mcp.exe"
+      "../THIRD_PARTY_NOTICES.txt": "THIRD_PARTY_NOTICES.txt"
     }
   }
 }

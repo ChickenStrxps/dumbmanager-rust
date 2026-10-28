@@ -1,5 +1,10 @@
 # Original UI native backend
 
+This document records the compatibility core baseline. Later native service
+implementations intercept the external routes described here; use the
+[current inventory](migration-inventory.md) and [capability audit](capability-inventory.md)
+for the integrated app. The baseline refusals below do not describe those services.
+
 The bundled original HTML/CSS/JS uses `native-transport.js` to turn same-origin
 `POST /api/*` requests into `invoke('legacy_api', {path, payload})`. The Rust
 command returns the original result object directly. A rejection is

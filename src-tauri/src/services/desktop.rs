@@ -3,6 +3,8 @@ use crate::state::AppState;
 use dumbmanager_core::legacy::{LegacyError, LegacyResult};
 use serde_json::{json, Value};
 use tauri::AppHandle;
+#[path = "desktop/capture.rs"]
+mod capture;
 #[path = "desktop/replay.rs"]
 mod replay;
 #[path = "desktop/shortcuts.rs"]
@@ -14,18 +16,24 @@ mod windows;
 pub fn install(app: &AppHandle) {
     shortcuts::install(app)
 }
-fn replay_status() -> Value {
-    json!({"armed":false,"window":null,"buffer_seconds":0,"buffer_bytes":0,"pending":0,"error":"Selected-window replay is not available in this build.","frames_per_second":10,"max_size":"640x360","idle_capture_processes":0,"note":"No capture is running. Replay requires a capture source that remains bound to the selected window identity."})
+/// Call only after manager.capture has successfully returned its itch ID.
+pub fn finish_replay(id: &str, token: &str, request_key: &str) {
+    capture::finish(id, token, request_key);
 }
 fn action(p: &Value) -> LegacyResult<&str> {
     p.get("action")
         .and_then(Value::as_str)
         .ok_or_else(|| LegacyError::invalid("Choose an action."))
 }
-fn id(p: &Value) -> LegacyResult<&str> {
+fn id(p: &Value) -> LegacyResult<String> {
     p.get("id")
         .and_then(Value::as_str)
         .ok_or_else(|| LegacyError::invalid("Missing replay id."))
+        .and_then(|id| {
+            uuid::Uuid::parse_str(id)
+                .map(|u| u.simple().to_string())
+                .map_err(|_| LegacyError::invalid("Invalid replay id."))
+        })
 }
 fn native(state: &AppState, p: &Value) -> LegacyResult<Value> {
     match action(p)? {
@@ -83,15 +91,41 @@ fn capture_region(state: &AppState, p: &Value) -> LegacyResult<Value> {
 }
 fn replay_api(state: &AppState, p: &Value) -> LegacyResult<Value> {
     let root = state.runtime.root();
-    match action(p)?{
-    "status"|"begin"|"disarm"=>Ok(replay_status()),
-    "windows"=>Ok(json!({"items":windows::windows(),"note":"Select a visible test window. Replay capture is unavailable in this build."})),
-    "arm"=>Err(LegacyError::unavailable("Selected-window replay is unavailable: this build cannot yet guarantee the selected window identity across handle reuse.")),
-    "item"=>replay::item(root,id(p)?),
-    "frame"=>{let n=p.get("index").and_then(Value::as_u64).ok_or_else(||LegacyError::invalid("Choose a frame index."))?;replay::frame(root,id(p)?,n)},
-    "keep"=>{let keep=p.get("keep").and_then(Value::as_bool).ok_or_else(||LegacyError::invalid("Choose whether to keep this replay."))?;replay::keep(root,id(p)?,keep)},
-    "delete"=>replay::delete(root,id(p)?),
-    _=>Err(LegacyError::invalid("Unknown replay action."))}
+    match action(p)? {
+        "status" => Ok(capture::status()),
+        "begin" => Ok(capture::begin(p["request_key"].as_str().unwrap_or(""))),
+        "cancel" => Ok(capture::cancel(p["request_key"].as_str().unwrap_or(""))),
+        "disarm" => Ok(capture::disarm()),
+        "windows" => Ok(json!({"items":windows::windows(),"note":"Select a visible test window."})),
+        "arm" => capture::arm(
+            root.to_path_buf(),
+            p.get("hwnd").and_then(Value::as_str).unwrap_or(""),
+        ),
+        "item" => {
+            let id = id(p)?;
+            if capture::pending(&id) {
+                Ok(json!({"available":false,"pending":true}))
+            } else {
+                replay::item(root, &id)
+            }
+        }
+        "frame" => {
+            let n = p
+                .get("index")
+                .and_then(Value::as_u64)
+                .ok_or_else(|| LegacyError::invalid("Choose a frame index."))?;
+            replay::frame(root, &id(p)?, n)
+        }
+        "keep" => {
+            let keep = p
+                .get("keep")
+                .and_then(Value::as_bool)
+                .ok_or_else(|| LegacyError::invalid("Choose whether to keep this replay."))?;
+            replay::keep(root, &id(p)?, keep)
+        }
+        "delete" => replay::delete(root, &id(p)?),
+        _ => Err(LegacyError::invalid("Unknown replay action.")),
+    }
 }
 pub fn handle(state: &AppState, path: &str, payload: &Value) -> Option<LegacyResult<Value>> {
     match path {

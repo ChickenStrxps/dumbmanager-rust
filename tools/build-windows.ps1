@@ -10,8 +10,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Desktop build failed.' }
     & cargo build --manifest-path src-tauri/Cargo.toml --release --locked --bin dumbmanager-mcp
     if ($LASTEXITCODE -ne 0) { throw 'MCP console build failed.' }
-    # Add the already-built console only at bundle time. This avoids making
-    # cargo's first compile depend on an executable it has not produced yet.
+    # Tauri bundles additional Cargo binaries automatically. Build the MCP
+    # console first so it is present once, without a duplicate resource entry.
     & $tauriCli bundle --ci --bundles nsis --config src-tauri/tauri.bundle.conf.json
     if ($LASTEXITCODE -ne 0) { throw 'Windows installer packaging failed.' }
 } finally {

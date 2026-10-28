@@ -1,39 +1,47 @@
 # Native release completion
 
-Status: development checkpoint, not a replacement release. A component handoff
+Status: local preview candidate, not a replacement release. A component handoff
 does not complete the integrated app. Keep these IDs stable until each gate has
 evidence, or a concrete access requirement that prevents verification.
 
-- [ ] RUST-01 — Discord workflows are implemented and have external integrated
-  service-fixture coverage: actual media/SQLite stash, exact destinations,
-  proposal/adoption and related judgments, persisted browser research, frozen
-  T3 confirmation/recovery and original ASCII PNG/GIF replies. Changed-itch and
-  changed-installation guards, cancelled previews and receipt reuse pass.
-  Independent review and the actual companion HTTP route remain open. Live
-  Discord registration/delivery is a separate RUST-05 verification requirement.
-- [ ] RUST-02 â€” Complete selected-window replay and verify snipping. Replay
-  storage is implemented, but no selected-window recording source is wired.
-  Snipping compiles and cancellation works. The external synthetic fixture's
-  automated drag did not reach the tool-window overlay; no successful selected
-  PNG is claimed. The fixture was stopped after that limitation was established.
-- [ ] RUST-03 â€” Finish the capability inventory against the original app and
-  exercise native capture/edit/review, attachments, reload and persistence in
-  disposable state. Check settings and unavailable adapters in the original UI.
-- [ ] RUST-04 â€” Verify real FFmpeg/FFprobe conversion and the exact preview GIF's
-  Windows clipboard handoff. Protocol fixtures and byte-selection checks do not
-  establish actual conversion or paste behavior.
-- [ ] RUST-05 â€” Verify configured integration boundaries. Local fixtures cover
-  provider, T3 and phone contracts. Live provider credentials, microphone/audio,
-  Discord and a real phone/proxy are not verified; do not borrow other installs'
-  credentials or call production services as test fixtures.
-- [ ] RUST-06 â€” Rebuild and inspect the final installer, app, MCP console and
-  source package. Check the accepted DM icon in the actual Windows shell. The
-  earlier successful installer predates the latest service changes.
-- [ ] RUST-07 â€” Independent review of the integrated final diff; resolve material
-  findings and run the documented build/static checks for that head.
-- [ ] RUST-08 â€” Show the actual integrated interface for user visual review, then
-  complete the private-repository PR workflow when its gates pass. Release or
-  publication requires its own authorization.
+- [x] RUST-01 - Discord workflows pass actual media/SQLite stash, exact
+  destinations, assistance/adoption, related judgments, persisted static-page
+  research, frozen full-source T3 confirmation/recovery and original ASCII cards.
+  Independent review covered public-network isolation, limits, native-edit and
+  research recovery. Signed HTTP was checked with a state shim; live delivery
+  remains an explicit RUST-05 limitation.
+- [x] RUST-02 - Identity-bound replay passes real synthetic-window capture and
+  storage checks. Explicit event/request binding prevents unrelated or cached
+  captures from consuming an entry; cancel/rebase prevents stale input. Completed
+  region snip, occluded pixels, close/disarm, stale choice, staged/orphan recovery
+  and interrupted keep/unkeep cleanup passed. No cursor input was used for the
+  final storage regression; earlier capture fixtures used owned windows.
+- [x] RUST-03 - Source routing inventory is in `capability-inventory.md`. Hidden
+  actual Tauri/WebView IPC checks passed startup, capture, edit, four-step plans,
+  byte-exact PNG attachment retrieval, domain-error handling, review without
+  acceptance, settings and persistence after reload. No cursor or focus input.
+- [ ] RUST-04 - Real FFmpeg/FFprobe conversion passed with a synthetic two-second
+  video: nine timestamped panels, 1464x834 JPEG, exact original bytes retained and
+  temporary files cleaned. Windows GIF clipboard handoff/paste is unverified;
+  it was not tested while the owner was using the desktop/clipboard.
+- [ ] RUST-05 - Configured boundaries passed local fixtures. Live provider keys,
+  microphone/audio, Discord delivery, real T3 and a physical phone/proxy remain
+  unavailable for verification. No credentials are borrowed from other installs.
+  These are preview limitations, not claims of tested live connectivity.
+- [x] RUST-06 - Optimized Windows app, MCP console and NSIS installer built.
+  The app and installer embed all nine approved icon sizes byte-for-byte. The
+  generated installer manifest includes the two production binaries and license
+  files, with no duplicate MCP resource. Clean source is archived from the final
+  commit; package hashes and inspection results accompany the external candidate.
+  The installer was not executed or extracted; existing installations are unchanged.
+- [x] RUST-07 - Independent review of the integration/recovery diff completed.
+  The remaining interrupted manifest-update finding was fixed and checked with
+  valid kept boards, explicit deletion and expiration recovery. No full security
+  audit or complete 1:1 runtime parity is implied. Strict Clippy and format/syntax
+  checks passed; the final optimized build is a separate RUST-06 gate.
+- [ ] RUST-08 - Actual hidden-native WebView stills are presented for user visual
+  approval. Complete the private-repository PR workflow after applicable CI and
+  visual gates pass. Publishing a release remains separately authorized.
 
 Recently closed implementation gaps: original public inspiration adapters and
 evidence-linked Learning topic guides. Learning passed twelve external fixture

@@ -119,16 +119,77 @@ fn manifest(base: &Path, id: &str) -> LegacyResult<Option<Value>> {
     }
     Ok(Some(v))
 }
+fn discard_incomplete(path: &Path) -> LegacyResult<()> {
+    if !ordinary(path, true) {
+        return Err(storage());
+    }
+    let mut files = Vec::new();
+    for entry in fs::read_dir(path).map_err(|_| storage())? {
+        let entry = entry.map_err(|_| storage())?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let known = name == "index.json"
+            || (name.len() == 8
+                && name.ends_with(".jpg")
+                && name[..4].bytes().all(|b| b.is_ascii_digit()))
+            || name
+                .strip_prefix("manifest-")
+                .and_then(|n| n.strip_suffix(".tmp"))
+                .is_some_and(id_ok);
+        if !known || !ordinary(&entry.path(), false) || files.len() >= 602 {
+            return Err(storage());
+        }
+        files.push(entry.path());
+    }
+    for file in files {
+        fs::remove_file(file).map_err(|_| storage())?;
+    }
+    fs::remove_dir(path).map_err(|_| storage())
+}
+fn purge_manifest_temps(path: &Path) -> LegacyResult<()> {
+    let mut pending = Vec::new();
+    for (count, entry) in fs::read_dir(path).map_err(|_| storage())?.enumerate() {
+        if count >= 602 {
+            return Err(storage());
+        }
+        let entry = entry.map_err(|_| storage())?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name
+            .strip_prefix("manifest-")
+            .and_then(|n| n.strip_suffix(".tmp"))
+            .is_some_and(id_ok)
+        {
+            if !ordinary(&entry.path(), false) {
+                return Err(storage());
+            }
+            pending.push(entry.path());
+        }
+    }
+    for file in pending {
+        fs::remove_file(file).map_err(|_| storage())?;
+    }
+    Ok(())
+}
 fn rows(base: &Path) -> LegacyResult<Vec<Value>> {
     let root = root(base)?;
     let mut out = Vec::new();
-    for entry in fs::read_dir(root).map_err(|_| storage())? {
+    for (count, entry) in fs::read_dir(&root).map_err(|_| storage())?.enumerate() {
+        if count >= 4096 {
+            return Err(storage());
+        }
         let entry = entry.map_err(|_| storage())?;
         let name = entry.file_name().to_string_lossy().into_owned();
-        if id_ok(&name) {
-            if let Ok(Some(v)) = manifest(base, &name) {
-                out.push(v)
+        if name.strip_prefix("stage-").is_some_and(id_ok) {
+            discard_incomplete(&entry.path())?;
+        } else if id_ok(&name) {
+            match manifest(base, &name) {
+                Ok(Some(v)) => {
+                    purge_manifest_temps(&folder(base, &name)?)?;
+                    out.push(v)
+                }
+                _ => discard_incomplete(&folder(base, &name)?)?,
             }
+        } else {
+            return Err(storage());
         }
     }
     Ok(out)
@@ -139,6 +200,7 @@ fn remove(base: &Path, id: &str) -> LegacyResult<bool> {
         return Ok(false);
     }
     let row = manifest(base, id)?.ok_or_else(storage)?;
+    purge_manifest_temps(&path)?;
     let count = row["frames"].as_array().ok_or_else(storage)?.len();
     let mut names = Vec::new();
     for e in fs::read_dir(&path).map_err(|_| storage())? {
@@ -193,7 +255,10 @@ fn write_new(path: &Path, data: &[u8]) -> LegacyResult<()> {
 }
 fn atomic_replace(path: &Path, data: &[u8]) -> LegacyResult<()> {
     let tmp = path.with_file_name(format!("manifest-{}.tmp", uuid::Uuid::new_v4().simple()));
-    write_new(&tmp, data)?;
+    if let Err(error) = write_new(&tmp, data) {
+        let _ = fs::remove_file(&tmp);
+        return Err(error);
+    }
     #[cfg(windows)]
     let ok = {
         use std::os::windows::ffi::OsStrExt;
@@ -214,7 +279,6 @@ fn atomic_replace(path: &Path, data: &[u8]) -> LegacyResult<()> {
     Ok(())
 }
 /// Save completed frames obtained by a trusted selected-window capture session.
-#[allow(dead_code)]
 pub fn save(
     base: &Path,
     id: &str,
@@ -246,25 +310,23 @@ pub fn save(
             "A replay already exists for this itch.",
         ));
     }
-    fs::create_dir(&path).map_err(|_| storage())?;
+    let staged = root(base)?.join(format!("stage-{}", uuid::Uuid::new_v4().simple()));
+    fs::create_dir(&staged).map_err(|_| storage())?;
     let result = (|| {
         for (i, (_, b)) in frames.iter().enumerate() {
-            write_new(&path.join(format!("{i:04}.jpg")), b)?
+            write_new(&staged.join(format!("{i:04}.jpg")), b)?
         }
         let stamps: Vec<f64> = frames.iter().map(|(t, _)| *t).collect();
         let row = json!({"owner":OWNER,"id":id,"created":now(),"keep":false,"frames":stamps,"bytes":bytes,"truncated":truncated,"window":window,"duration":frames.last().unwrap().0,"format":"jpeg-frameboard","audio":false});
         write_new(
-            &path.join("index.json"),
+            &staged.join("index.json"),
             &serde_json::to_vec(&row).map_err(|_| storage())?,
         )?;
+        fs::rename(&staged, &path).map_err(|_| storage())?;
         Ok(())
     })();
     if result.is_err() {
-        for i in 0..frames.len() {
-            let _ = fs::remove_file(path.join(format!("{i:04}.jpg")));
-        }
-        let _ = fs::remove_file(path.join("index.json"));
-        let _ = fs::remove_dir(path);
+        let _ = discard_incomplete(&staged);
     }
     result
 }

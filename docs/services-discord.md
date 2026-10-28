@@ -16,7 +16,11 @@ and exact T3 thread IDs; thread choices include installation identity. Stash
 defaults to **unsorted**, never the desktop's active context. A stashed draft
 keeps its project. Durable capture/update keys preserve source message URL/ID,
 author/channel metadata, edited fields and app-owned evidence IDs. Stash neither
-sends to T3 nor accepts the itch.
+sends to T3 nor accepts the itch. Serialized evidence is checked before capture.
+An interrupted stash can be edited and recovered with its original capture
+identity. Recovery appends provenance using the current itch version and
+preserves intervening native goals, titles and evidence. Full source and edited
+fields remain in provenance even when the short itch title/original differs.
 
 Four attachments totaling 20 MiB are supported, with 10 MiB per image. Types are
 PNG/JPEG/WebP/GIF and video. Only HTTPS Discord CDN attachment URLs are downloaded,
@@ -31,13 +35,17 @@ Jev** judges up to eight candidates from the newest 100 local itches in the
 selected project. It never merges them.
 
 **Research with Jev** needs a stashed itch, tested Jev connection and configured
-Chromium/Edge executable. A fresh owned browser profile visits a search page and
-up to three observed public HTTPS links. Jev selects among bounded observed
-links; it cannot type, submit forms, sign in or authorize actions. Excerpts and
-exact citations are retained in a research run with the itch. These are source
-observations, not an independently verified answer or implementation plan.
-**Read research** returns the retained report as a text attachment. New
-page visits stop after 90 seconds; an in-flight request can finish later.
+Chromium/Edge executable. Rust fetches at most four HTML documents over HTTPS,
+validating all resolved addresses and pinning them for each request. Redirects
+are followed only after the same validation; proxies, credentials and cookies
+are not used. A fresh owned browser reads static HTML with scripts and all
+network requests disabled. Jev selects among bounded observed links; it cannot
+type, submit forms, sign in or authorize actions. Pages requiring JavaScript may
+be unreadable. Excerpts and exact citations are retained with the itch; they are
+source observations, not independent verification or an implementation plan.
+**Read research** returns the report as a text attachment. Completed reports and
+pending saved results recover without another provider pass. New page fetches
+stop after 90 seconds; an in-flight request can finish later.
 
 **ASCII card** uses the original artwork and 17 themes in an owned browser
 session. GIF, still PNG and flash preferences are honored. Stash also attaches
@@ -46,7 +54,9 @@ Cards contain draft text only, never evidence images. These short-lived sessions
 do not replace desktop Browse and are closed and removed after each operation.
 
 **Preview T3 send** verifies the exact destination, freezes itch version, text
-and evidence, and attaches complete `send-preview.txt`. **Confirm T3 send** is
+and evidence, and attaches complete `send-preview.txt`, including the full bounded
+original Discord message as untrusted source text. An oversized preview fails
+before sending rather than silently truncating the source. **Confirm T3 send** is
 required to dispatch. A changed itch rejects a first send; cancel and prepare a
 new preview. Each fresh preview has a new durable key. An uncertain send keeps
 its original installation, words, evidence and retry identity and cannot be
@@ -71,6 +81,14 @@ enabled in the app.
 
 These checks do not establish real Discord registration/delivery, live provider
 quality, public search availability or compatibility with a running T3 version.
-The actual companion HTTP route still needs integrated verification. No live
+The companion HTTP handler passed signed PING/rejection fixtures with a state
+shim; the real Tauri AppHandle/listener and delivery still need verification. No live
 Discord/provider/T3 service was contacted or itch accepted. Development fixtures
 and evidence remain outside the repository.
+
+Research preparation recovery looks up its stable request key across all saved
+runs, not just the most recent run. A committed run is returned before checking
+a later itch version. When the exact key has no committed run, the bridge retains
+its frozen question, reconciles the current itch version and persists that
+preparation before retrying. The external fixture checked native edits, a newer
+unrelated run, stale-version retries and an interrupted missing preparation.

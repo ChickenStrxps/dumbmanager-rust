@@ -1,5 +1,7 @@
 //! Short-lived bridge sessions never replace the user's Browse session.
 use super::*;
+#[path = "bridge_fetch.rs"]
+mod fetch;
 use base64::{engine::general_purpose::STANDARD, Engine};
 
 fn evaluate(session: &mut Session, expression: &str) -> LegacyResult<Value> {
@@ -14,7 +16,7 @@ fn evaluate(session: &mut Session, expression: &str) -> LegacyResult<Value> {
 }
 fn public_url(value: &str) -> Option<String> {
     let u = url::Url::parse(value).ok()?;
-    let host = u.host_str()?;
+    let host = u.host_str()?.trim_end_matches('.');
     if u.scheme() != "https"
         || !u.username().is_empty()
         || u.password().is_some()
@@ -56,6 +58,19 @@ pub fn research(state: &AppState, query: &str) -> LegacyResult<Value> {
     let mut url = url::Url::parse("https://www.google.com/search").unwrap();
     url.query_pairs_mut().append_pair("q", query);
     let mut session = isolated_session(state, "about:blank")?;
+    // Untrusted HTML is never navigated. Only Rust may fetch documents; the
+    // DOM reader has scripts and all network requests disabled before insertion.
+    let page = session.page(false)?;
+    page.call("Network.enable", json!({}))?;
+    page.call("Network.setBlockedURLs", json!({"urls":["*"]}))?;
+    page.call(
+        "Network.emulateNetworkConditions",
+        json!({"offline":true,"latency":0,"downloadThroughput":0,"uploadThroughput":0}),
+    )?;
+    page.call(
+        "Emulation.setScriptExecutionDisabled",
+        json!({"value":true}),
+    )?;
     let deadline = Instant::now() + Duration::from_secs(90);
     let mut next = url.to_string();
     let mut sources = Vec::new();
@@ -64,24 +79,25 @@ pub fn research(state: &AppState, query: &str) -> LegacyResult<Value> {
         if Instant::now() > deadline || !visited.insert(next.clone()) {
             break;
         }
-        navigate(&mut session, &next)?;
-        thread::sleep(Duration::from_millis(650));
+        let document = fetch::document(&next)?;
+        let tree = session.page(false)?.call("Page.getFrameTree", json!({}))?;
+        session.page(false)?.call("Page.setDocumentContent",json!({"frameId":tree["frameTree"]["frame"]["id"],"html":"<!doctype html><html><head><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'none'; base-uri 'none'; form-action 'none'\"></head><body></body></html>"}))?;
+        evaluate(&mut session,&format!("(()=>{{const d=new DOMParser().parseFromString({},'text/html'); d.querySelectorAll('script,style,link,meta,base,iframe,frame,object,embed').forEach(e=>e.remove()); document.title=d.title; document.body.replaceChildren(...d.body.childNodes); return true;}})()",json!(document.html)))?;
         let page = session.read()?;
-        let page_url = public_url(s(&page, "url")).ok_or_else(|| {
-            LegacyError::invalid("Research stopped at a non-public HTTPS address.")
-        })?;
+        let page_url = document.url;
         let excerpt = bounded(s(&page, "text"), 2800);
         if !excerpt.trim().is_empty() {
             sources.push(json!({"id":format!("source{}",sources.len()+1),"title":bounded(s(&page,"title"),240),"url":page_url,"excerpt":excerpt}));
         }
-        let links=evaluate(&mut session,"JSON.parse(JSON.stringify(Array.from(document.querySelectorAll('a[href]')).slice(0,150).map(a=>({url:a.href,title:(a.innerText||a.getAttribute('aria-label')||'').trim().slice(0,120)}))))")?;
+        let links=evaluate(&mut session,"JSON.parse(JSON.stringify(Array.from(document.querySelectorAll('a[href]')).slice(0,150).map(a=>({url:a.getAttribute('href'),title:(a.innerText||a.getAttribute('aria-label')||'').trim().slice(0,120)}))))")?;
         let mut seen = std::collections::HashSet::new();
         let links: Vec<Value> = links
             .as_array()
             .into_iter()
             .flatten()
             .filter_map(|v| {
-                let url = public_url(s(v, "url"))?;
+                let resolved = url::Url::parse(&page_url).ok()?.join(s(v, "url")).ok()?;
+                let url = public_url(resolved.as_str())?;
                 if url.len() > 400
                     || visited.contains(&url)
                     || !seen.insert(url.clone())
@@ -127,7 +143,7 @@ pub fn research(state: &AppState, query: &str) -> LegacyResult<Value> {
     }
     let findings:Vec<Value>=sources.iter().map(|v| { let quote=bounded(s(v,"excerpt"),1200);json!({"kind":"observed","text":format!("Observed excerpt from {}. This is source text, not independent verification.",s(v,"title")),"citations":[{"source_id":v["id"],"quote":quote}]}) }).collect();
     Ok(
-        json!({"summary":"Bounded public-page research with Jev source selection. Review the retained excerpts and citations; this is not an exhaustive or independently verified answer.","sources":sources,"findings":findings,"plan":[],"limitations":["At most four pages; stop starting pages after 90 seconds. An in-flight request may finish later. No sign-in, form submission, downloads or account actions.","Only the visible excerpt and six bounded observed links are assessed per page. Page text and Jev relevance judgments may be wrong; no implementation or acceptance occurred."],"open_questions":[],"tools":[],"tool_ideas":[]}),
+        json!({"summary":"Bounded public-page research with Jev source selection. Review the retained excerpts and citations; this is not an exhaustive or independently verified answer.","sources":sources,"findings":findings,"plan":[],"limitations":["At most four pages; stop starting pages after 90 seconds. An in-flight request may finish later. No sign-in, form submission, downloads or account actions.","Static HTML only: scripts, subresources and browser network requests are disabled. Public DNS addresses are validated and pinned for each fetch and redirect. JavaScript-dependent pages may be unreadable.","Only the visible excerpt and six bounded observed links are assessed per page. Page text and Jev relevance judgments may be wrong; no implementation or acceptance occurred."],"open_questions":[],"tools":[],"tool_ideas":[]}),
     )
 }
 

@@ -50,8 +50,7 @@ impl AppState {
     }
 
     // These operations are the shared native command service. The Tauri
-    // adapters dispatch them to spawn_blocking; the console QA example calls
-    // the same methods against a new, strictly temporary data directory.
+    // adapters dispatch them to spawn_blocking.
     pub fn app_snapshot(&self, version: &str) -> CoreResult<AppSnapshot> {
         Ok(AppSnapshot {
             name: APP_NAME.to_owned(),
@@ -163,8 +162,13 @@ impl AppState {
             return result;
         }
         if path == "/api/call" {
-            let (name, args) = legacy::call_envelope(payload)?;
+            let (name, mut args) = legacy::call_envelope(payload)?;
             if matches!(name, "manager.capture" | "manager.attach") {
+                let replay_token = args
+                    .as_object_mut()
+                    .and_then(|a| a.remove("native_replay_token"))
+                    .and_then(|v| v.as_str().map(str::to_owned))
+                    .unwrap_or_default();
                 let ids = match args.get("attachments") {
                     None => serde_json::json!([]),
                     Some(Value::String(raw)) => serde_json::from_str(raw)
@@ -172,9 +176,19 @@ impl AppState {
                     Some(value) => value.clone(),
                 };
                 let references = crate::services::media::references(self, &ids)?;
-                return self
+                let result = self
                     .store()
-                    .legacy_call_with_media(name, &args, Some(&references));
+                    .legacy_call_with_media(name, &args, Some(&references))?;
+                if name == "manager.capture" {
+                    if let Some(id) = result["id"].as_str() {
+                        crate::services::desktop::finish_replay(
+                            id,
+                            &replay_token,
+                            args["request_key"].as_str().unwrap_or(""),
+                        );
+                    }
+                }
+                return Ok(result);
             }
             if name == "manager.card_export" {
                 // This optional local extension uses the existing verified

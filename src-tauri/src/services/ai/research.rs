@@ -39,6 +39,25 @@ fn prepare(state: &AppState, args: &Value) -> LegacyResult<Value> {
     fields(args, &["id", "question", "expected_version"])?;
     let id = text(args, "id", 100, true)?;
     let question = text(args, "question", 2000, false)?;
+    let request_key = text(args, "request_key", 128, false)?;
+    if !request_key.is_empty() {
+        let doc = state.runtime.read_document(DOCUMENT)?;
+        if let Some(existing) = doc["runs"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|r| r["request_key"] == request_key)
+        {
+            if existing["itch_id"] != id
+                || (!question.is_empty() && existing["question"] != question)
+            {
+                return Err(LegacyError::conflict(
+                    "Retry key belongs to a different research brief.",
+                ));
+            }
+            return pack(state, id, existing["id"].as_str().unwrap_or(""));
+        }
+    }
     let row = itch(state, id)?;
     if args["expected_version"].as_u64() != row["version"].as_u64() {
         return Err(LegacyError::conflict(
@@ -87,7 +106,7 @@ fn prepare(state: &AppState, args: &Value) -> LegacyResult<Value> {
                 .iter()
                 .find(|r| r["request_key"] == request_key)
             {
-                if existing["fingerprint"] != fingerprint {
+                if existing["itch_id"] != id || existing["question"] != q {
                     return Err(LegacyError::conflict(
                         "Retry key belongs to a different research brief.",
                     ));
@@ -567,7 +586,31 @@ pub(super) fn handle(
                 Ok(v) => v,
                 Err(e) => return Some(Err(e)),
             };
-            pack(state, id, run)
+            let key = match text(args, "request_key", 128, false) {
+                Ok(v) => v,
+                Err(e) => return Some(Err(e)),
+            };
+            if run.is_empty() && !key.is_empty() {
+                let doc = match state.runtime.read_document(DOCUMENT) {
+                    Ok(v) => v,
+                    Err(e) => return Some(Err(e)),
+                };
+                let found = doc["runs"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .find(|r| r["itch_id"] == id && r["request_key"] == key);
+                if let Some(found) = found {
+                    pack(state, id, found["id"].as_str().unwrap_or(""))
+                } else {
+                    pack(state, id, "").map(|mut p| {
+                        p["run"] = Value::Null;
+                        p
+                    })
+                }
+            } else {
+                pack(state, id, run)
+            }
         }
         "manager.research.prepare" => prepare(state, args),
         "manager.research.send" => send(state, args, target),
