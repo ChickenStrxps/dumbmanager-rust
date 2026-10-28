@@ -39,9 +39,9 @@ evidence, or a concrete access requirement that prevents verification.
   valid kept boards, explicit deletion and expiration recovery. No full security
   audit or complete 1:1 runtime parity is implied. Strict Clippy and format/syntax
   checks passed; the final optimized build is a separate RUST-06 gate.
-- [ ] RUST-08 - Actual hidden-native WebView stills are presented for user visual
-  approval. Complete the private-repository PR workflow after applicable CI and
-  visual gates pass. Publishing a release remains separately authorized.
+- [ ] RUST-08 - The owner approved the actual hidden-native WebView stills.
+  Complete the private-repository PR workflow after applicable CI passes.
+  Publishing a release remains separately authorized.
 
 Recently closed implementation gaps: original public inspiration adapters and
 evidence-linked Learning topic guides. Learning passed twelve external fixture
