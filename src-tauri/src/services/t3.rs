@@ -954,6 +954,26 @@ pub fn send_message(state: &AppState, args: &Value, expected_target: &str) -> Le
     send(state, &cfg, &conn, args)
 }
 
+/// Discord freezes an explicit preview and its evidence before confirmation.
+pub fn bridge_snapshot(row: &Value) -> Value {
+    json!({"id":row["id"],"version":row["version"],"title":row["title"],"original":row["original"],"project":row["project"],"desired_outcome":row["desired_outcome"],"attachments":row["attachments"]})
+}
+pub fn bridge_send(
+    state: &AppState,
+    args: &Value,
+    expected_target: &str,
+    snapshot: &Value,
+) -> LegacyResult<Value> {
+    if expected_target.is_empty() {
+        return Err(LegacyError::invalid("Choose an exact T3 installation."));
+    }
+    let _guard = lock();
+    let cfg = config(state)?;
+    target_guard(&cfg, expected_target)?;
+    let conn = connection(state, &cfg)?;
+    manager_send_locked(state, &cfg, &conn, args, Some(snapshot))
+}
+
 pub fn handle(state: &AppState, path: &str, payload: &Value) -> Option<LegacyResult<Value>> {
     if path == "/api/cook" {
         return Some(cook(state, payload));
@@ -1046,7 +1066,7 @@ pub fn handle(state: &AppState, path: &str, payload: &Value) -> Option<LegacyRes
                         text(&args, "attachment_id"),
                     ),
                     "t3.send" => send(state, &cfg, &conn, &args),
-                    "manager.send" => manager_send_locked(state, &cfg, &conn, &args),
+                    "manager.send" => manager_send_locked(state, &cfg, &conn, &args, None),
                     _ => unreachable!(),
                 }
             }
@@ -1208,6 +1228,7 @@ fn manager_send_locked(
     cfg: &Value,
     conn: &Connection,
     args: &Value,
+    expected_snapshot: Option<&Value>,
 ) -> LegacyResult<Value> {
     use base64::Engine;
     let id = text(args, "id");
@@ -1255,6 +1276,9 @@ fn manager_send_locked(
         let row = state
             .store()
             .legacy_call("manager.get", &json!({"id":id}))?;
+        if expected_snapshot.is_some_and(|expected| expected != &bridge_snapshot(&row)) {
+            return Err(err("bridge_preview_changed",409,"This itch changed after the preview. Cancel it and prepare a new preview before sending."));
+        }
         let brief = if requested.is_empty() {
             state
                 .store()
@@ -1266,7 +1290,7 @@ fn manager_send_locked(
             requested.to_owned()
         };
         let local = crate::services::media::references(state, &row["attachments"])?;
-        let brief = if local.is_empty() {
+        let brief = if local.is_empty() || expected_snapshot.is_some() {
             brief
         } else {
             brief.replace("Open this itch in DumbManager to inspect it. These local files are not automatically sent to T3.", "The visual evidence is attached to this message. Original video files retain audio; frameboards contain sampled timestamps and no audio.")
@@ -1510,7 +1534,7 @@ fn cook(state: &AppState, payload: &Value) -> LegacyResult<Value> {
                 let cfg = config(state)?;
                 target_guard(&cfg, &destination)?;
                 let conn = connection(state, &cfg)?;
-                manager_send_locked(state, &cfg, &conn, &args)
+                manager_send_locked(state, &cfg, &conn, &args, None)
             })();
             let mut c = cook_state().lock().unwrap_or_else(|e| e.into_inner());
             c.active = false;

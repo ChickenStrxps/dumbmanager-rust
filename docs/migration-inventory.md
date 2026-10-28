@@ -24,8 +24,9 @@ No listener, global shortcut or capture starts automatically.
   console. Unconfigured integrations remain unconfigured.
 - Opt-in phone HTTP listener with one-time invitations, HttpOnly sessions,
   CSRF/Host/Origin checks and a restricted itch/chat capability surface.
-- Signed Discord PING/text intake, scoped editable drafts, explicit stash and
-  named command registration. The remaining Discord workflows are incomplete.
+- Signed Discord intake, bounded attachments, scoped edits and durable stash,
+  explicit destinations, Mercury/Jev assistance, retained research, confirmed
+  T3 handoffs and original ASCII cards. See `services-discord.md` for limits.
 - Explicitly enabled global shortcuts, screen-region snipping into local evidence,
   and user-facing shortcut diagnostics. The selector passes compiler checks and
   cancellation checks; a successful region capture still needs UI verification.
@@ -33,7 +34,7 @@ No listener, global shortcut or capture starts automatically.
 ## Still required before full replacement
 
 - Selected-window replay capture and final snipping UI verification.
-- Complete Discord attachment, destination, research, send and artwork workflows.
+- Integrated Discord HTTP routing and live registration/delivery verification.
 - Captured X still needs an explicitly configured source; the original public
   RSS/TypeSafe feeds and evidence-linked Learning topic guides are implemented.
 - Reconcile the original capability inventory against the native registry.

@@ -17,6 +17,9 @@ use tungstenite::{stream::MaybeTlsStream, Message, WebSocket};
 
 #[path = "browser/advice.rs"]
 mod advice;
+#[path = "browser/bridge.rs"]
+mod bridge;
+pub use bridge::{card as bridge_card, research as bridge_research, BridgeCard};
 const SETTINGS: &str = "browser-settings";
 const KEY: &str = "browser-jev-key";
 const IDLE: Duration = Duration::from_secs(900);
@@ -468,6 +471,23 @@ fn start(state: &AppState, url: &str, connected: bool) -> LegacyResult<Value> {
         }
     }
     *guard = None;
+    let mut session = isolated_session(state, &destination)?;
+    let result = session.snapshot(connected)?;
+    *guard = Some(session);
+    REAPER.get_or_init(|| {
+        thread::spawn(|| loop {
+            thread::sleep(Duration::from_secs(15));
+            let mut g = sessions().lock().unwrap_or_else(|e| e.into_inner());
+            if g.as_mut().is_some_and(|s| {
+                s.last.elapsed() >= IDLE || s.child.try_wait().ok().flatten().is_some()
+            }) {
+                *g = None
+            }
+        });
+    });
+    Ok(result)
+}
+fn isolated_session(state: &AppState, destination: &str) -> LegacyResult<Session> {
     let config = state.runtime.read_document(SETTINGS)?;
     let executable = Path::new(s(&config, "executable"));
     if !executable.is_absolute() || !executable.is_file() {
@@ -596,23 +616,10 @@ fn start(state: &AppState, url: &str, connected: bool) -> LegacyResult<Value> {
     let tabs = session.tabs()?;
     session.tab = s(tabs.first().ok_or_else(stopped)?, "id").to_string();
     if destination != "about:blank" {
-        navigate(&mut session, &destination)?;
+        navigate(&mut session, destination)?;
         thread::sleep(Duration::from_millis(250));
     }
-    let result = session.snapshot(connected)?;
-    *guard = Some(session);
-    REAPER.get_or_init(|| {
-        thread::spawn(|| loop {
-            thread::sleep(Duration::from_secs(15));
-            let mut g = sessions().lock().unwrap_or_else(|e| e.into_inner());
-            if g.as_mut().is_some_and(|s| {
-                s.last.elapsed() >= IDLE || s.child.try_wait().ok().flatten().is_some()
-            }) {
-                *g = None
-            }
-        });
-    });
-    Ok(result)
+    Ok(session)
 }
 fn navigate(session: &mut Session, url: &str) -> LegacyResult<()> {
     let url = web_url(url)?;

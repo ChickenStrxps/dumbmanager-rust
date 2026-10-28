@@ -29,7 +29,7 @@ MCP clients use the separate `dumbmanager-mcp.exe` console program.
 
 External services start unconfigured and use your own credentials. Provider,
 phone and external-client compatibility still need live checks. Desktop snipping,
-selected-window replay and Discord interaction routing remain unfinished.
+selected-window replay and integrated Discord delivery verification remain unfinished.
 No successful connection or operation is simulated.
 
 ## Build from source

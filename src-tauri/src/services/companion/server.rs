@@ -216,7 +216,16 @@ fn handle(app: &AppHandle, auth: &Mutex<Auth>, origins: &[String], mut r: Reques
         }
         let state = app.state::<AppState>();
         match super::discord::receive(&state, &signature, &timestamp, &raw) {
-            Ok(v) => respond(r, json_response(200, v)),
+            Ok((v, job)) => {
+                respond(r, json_response(200, v));
+                if let Some(job) = job {
+                    let app = app.clone();
+                    std::thread::spawn(move || {
+                        let state = app.state::<AppState>();
+                        super::discord::run_job(&state, job);
+                    });
+                }
+            }
             Err(e) => respond(
                 r,
                 json_response(e.status, json!({"error":e.error,"code":e.code})),

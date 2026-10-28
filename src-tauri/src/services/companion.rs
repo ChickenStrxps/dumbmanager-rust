@@ -80,8 +80,20 @@ fn bridge_status(state: &AppState) -> LegacyResult<Value> {
     let d = state.runtime.read_document(BRIDGE)?;
     let id = d["application_id"].as_str().unwrap_or("");
     let key = d["public_key"].as_str().unwrap_or("");
+    let verified = state
+        .runtime
+        .read_document("bridge-discord-verified.json")?;
+    let last_verified = if verified["application_id"] == id
+        && verified["public_key"] == key
+        && !id.is_empty()
+        && !key.is_empty()
+    {
+        verified["at"].clone()
+    } else {
+        Value::Null
+    };
     Ok(
-        json!({"version":d["version"].as_u64().unwrap_or(0),"enabled":d["enabled"].as_bool().unwrap_or(false),"configured":!id.is_empty() && key.len()==64 && d["users"].as_array().is_some_and(|x|!x.is_empty()),"application_id":id,"public_key":key,"users":d["users"].as_array().cloned().unwrap_or_default(),"channels":d["channels"].as_array().cloned().unwrap_or_default(),"guilds":d["guilds"].as_array().cloned().unwrap_or_default(),"animated":d["animated"].as_bool().unwrap_or(true),"flashes":d["flashes"].as_bool().unwrap_or(false),"theme":d["theme"].as_str().unwrap_or(""),"bot_key_saved":state.runtime.secret(BOT_SECRET)?.is_some(),"signature_verifier":true,"last_verified_interaction":null,"interaction_available":server::running()}),
+        json!({"version":d["version"].as_u64().unwrap_or(0),"enabled":d["enabled"].as_bool().unwrap_or(false),"configured":!id.is_empty() && key.len()==64 && d["users"].as_array().is_some_and(|x|!x.is_empty()),"application_id":id,"public_key":key,"users":d["users"].as_array().cloned().unwrap_or_default(),"channels":d["channels"].as_array().cloned().unwrap_or_default(),"guilds":d["guilds"].as_array().cloned().unwrap_or_default(),"animated":d["animated"].as_bool().unwrap_or(true),"flashes":d["flashes"].as_bool().unwrap_or(false),"theme":d["theme"].as_str().unwrap_or(""),"bot_key_saved":state.runtime.secret(BOT_SECRET)?.is_some(),"signature_verifier":true,"last_verified_interaction":last_verified,"interaction_available":server::running()}),
     )
 }
 fn ids(v: &Value, key: &str) -> LegacyResult<Vec<String>> {
@@ -154,7 +166,7 @@ fn bridge_configure(state: &AppState, v: &Value) -> LegacyResult<Value> {
 fn commands() -> Value {
     json!([
         {"name":"DumbBridge","type":3,"integration_types":[0,1],"contexts":[0,1,2]},
-        {"name":"dumbbridge","description":"Shape a message into an itch, research or T3 conversation.","type":1,"integration_types":[0,1],"contexts":[0,1,2],"options":[{"name":"message","description":"Idea, research question or message to T3","type":3,"required":true,"max_length":2000},{"name":"attachment","description":"Optional image or video evidence","type":11,"required":false}]}
+        {"name":"dumbbridge","description":"Shape a message into an itch, research or T3 conversation.","type":1,"integration_types":[0,1],"contexts":[0,1,2],"options":[{"name":"message","description":"Idea, research question or message to T3","type":3,"required":false,"max_length":2000},{"name":"attachment","description":"Optional image or video evidence","type":11,"required":false},{"name":"draft","description":"Resume your saved draft ID in this channel","type":3,"required":false,"max_length":32}]}
     ])
 }
 fn register(state: &AppState, v: &Value) -> LegacyResult<Value> {

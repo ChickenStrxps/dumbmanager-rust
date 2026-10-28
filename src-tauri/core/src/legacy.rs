@@ -651,7 +651,7 @@ fn brief(conn: &Connection, args: &Args<'_>) -> LegacyResult<Value> {
     if row["feedback"].as_array().is_some_and(|v| !v.is_empty()) {
         brief.push_str(&format!("\n\nSaved feedback: {}", row["feedback"]));
     }
-    brief.push_str("\n\nRecheck current conditions and preserve evidence. Report ready for review; only explicit user acceptance resolves this itch. This Rust build has no external agent connection: copy this brief manually. Do not use the original DumbAPI to update this isolated record.");
+    brief.push_str("\n\nRecheck current conditions and preserve evidence. Report ready for review; only explicit user acceptance resolves this itch. Send through an explicitly configured native T3 connection or copy this brief manually. Do not use the original DumbAPI to update this isolated record.");
     Ok(
         json!({"id":row["id"],"brief":brief,"thread_url":Value::Null,"handoff":"copy_brief",
         "note":"Prepared locally. No thread was opened, verified, or sent a message."}),
