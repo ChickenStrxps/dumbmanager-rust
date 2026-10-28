@@ -26,7 +26,7 @@ count, no external processes or runtime fonts. Content is kept still. Files use
 create-new unique names under the supplied export directory. No network or posting.
 Only ASCII/Latin font coverage currently; do not claim full Unicode typography.
 
-`cargo test --manifest-path crates/card-renderer/Cargo.toml` checks decoder output,
+Earlier isolated renderer checks covered decoder output,
 periodic closure/static copy, word wrapping, invalid input and path confinement.
 `cargo run --release --manifest-path crates/card-renderer/Cargo.toml --example render`
 writes two actual synthetic artwork examples into ignored `artifacts/cards/`.

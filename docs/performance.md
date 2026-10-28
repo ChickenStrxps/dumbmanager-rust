@@ -25,10 +25,9 @@ The first 40-frame prototype took about 123 ms; it was then increased to 72 fram
 before the measurements above. Do not compare that early figure with the current
 renderer without mentioning the frame-count difference.
 
-Reproduce native measurements with `py tools/benchmark-render.py`. The tool builds
-the optimized renderer, produces five real GIF/PNG pairs under ignored
-`artifacts/benchmark/`, and records measurements in `artifacts/render-benchmark.json`.
-Compilation is excluded. Rust 1.95.0 was used for these measurements.
+The development benchmark runner was removed from the repository. These are
+historical measurements of the earlier prototype, not the current full card flow.
+Rust 1.95.0 was used for that experiment.
 
 ## Desktop comparison still needed
 

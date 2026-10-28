@@ -115,6 +115,18 @@ pub async fn open_export_folder(app: AppHandle) -> CommandResult<()> {
     .await
 }
 
+#[tauri::command]
+pub async fn choose_path(folder: bool) -> CommandResult<Option<String>> {
+    tauri::async_runtime::spawn_blocking(move || platform::pick_path(folder))
+        .await
+        .map_err(|_| {
+            CommandError::from(dumbmanager_core::CoreError::Unavailable(
+                "The file chooser stopped.".into(),
+            ))
+        })?
+        .map_err(Into::into)
+}
+
 /// Same-origin `/api/*` compatibility for the original, bundled frontend.
 /// Domain failures retain the original `{error, code, status}` shape.
 #[tauri::command]

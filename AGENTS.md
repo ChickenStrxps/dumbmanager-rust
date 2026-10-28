@@ -29,7 +29,7 @@ send webhooks, dispatch agents, or launch the original application. Development
 delegation/review follows the user's request and applicable workflow policy;
 this product restriction does not prohibit authorized development reviewers.
 
-Directory map: native backend/config/tests in `src-tauri/`; interface/artwork in
+Directory map: native backend/config in `src-tauri/`; interface/artwork in
 `web/` and `assets/`; renderer in `crates/card-renderer`; build/art tooling and
 instructions in root config, `tools/`, and `docs/`. Assign task-specific ownership
 before concurrent edits; coordinate shared contracts through the parent.

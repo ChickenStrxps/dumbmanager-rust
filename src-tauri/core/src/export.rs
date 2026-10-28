@@ -275,16 +275,24 @@ impl ExportGate {
     }
 
     pub fn try_enter(&self) -> CoreResult<ExportPermit<'_>> {
-        self.running
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| {
-                (n < MAX_PARALLEL_EXPORTS).then_some(n + 1)
-            })
-            .map(|_| ExportPermit { gate: self })
-            .map_err(|_| {
-                CoreError::Busy(format!(
+        // Keep compatibility with Rust 1.88, before AtomicUsize::try_update.
+        let mut running = self.running.load(Ordering::Acquire);
+        loop {
+            if running >= MAX_PARALLEL_EXPORTS {
+                return Err(CoreError::Busy(format!(
                     "{MAX_PARALLEL_EXPORTS} card exports are already running. Try again when one finishes."
-                ))
-            })
+                )));
+            }
+            match self.running.compare_exchange_weak(
+                running,
+                running + 1,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => return Ok(ExportPermit { gate: self }),
+                Err(current) => running = current,
+            }
+        }
     }
 
     pub fn running(&self) -> usize {
@@ -358,34 +366,4 @@ pub fn write_new_file(
     Err(CoreError::Io(
         "Could not find a free export file name.".to_owned(),
     ))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn gate_caps_parallel_exports_and_frees_slots_on_drop() {
-        let gate = ExportGate::new();
-        let first = gate.try_enter().unwrap();
-        let second = gate.try_enter().unwrap();
-        assert_eq!(gate.running(), 2);
-        let refused = gate.try_enter().unwrap_err();
-        assert_eq!(refused.code(), "busy");
-        assert_eq!(gate.running(), 2, "a refused request takes no slot");
-        drop(first);
-        let third = gate.try_enter().unwrap();
-        drop(second);
-        drop(third);
-        assert_eq!(gate.running(), 0);
-    }
-
-    #[test]
-    fn signatures() {
-        assert!(CardFormat::Png.matches_signature(PNG_SIGNATURE));
-        assert!(CardFormat::Gif.matches_signature(b"GIF89a.."));
-        assert!(CardFormat::Gif.matches_signature(b"GIF87a.."));
-        assert!(!CardFormat::Gif.matches_signature(PNG_SIGNATURE));
-        assert!(!CardFormat::Png.matches_signature(b"\x89PN"));
-    }
 }

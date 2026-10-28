@@ -5,8 +5,7 @@
   "description": "Isolated Rust desktop companion for DumbManager",
   "scripts": {
     "dev": "tauri dev",
-    "build": "tauri build",
-    "check:ui": "node tools/check-ui.mjs"
+    "build": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-windows.ps1"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0"

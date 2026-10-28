@@ -244,6 +244,19 @@ pub fn call_envelope(payload: &Value) -> LegacyResult<(&str, Value)> {
 }
 
 impl Store {
+    /// Only the native T3 adapter calls this after a confirmed delivery. It is
+    /// deliberately absent from the page's capability allowlist.
+    pub fn legacy_record_handoff(&mut self, payload: &Value) -> LegacyResult<Value> {
+        let args = Args::new(
+            payload,
+            &["id", "request_key", "thread_id", "message_id", "at"],
+        )?;
+        let tx = self.write_tx()?;
+        let row = itches::record_handoff(&tx, &args)?;
+        tx.commit()?;
+        Ok(row)
+    }
+
     /// Raw result / structured error, exactly as the old `/api/*` frontend
     /// expects. The Tauri command invokes this on its blocking pool.
     pub fn legacy_api(&mut self, path: &str, payload: &Value) -> LegacyResult<Value> {
@@ -296,6 +309,18 @@ impl Store {
     }
 
     pub fn legacy_call(&mut self, name: &str, payload: &Value) -> LegacyResult<Value> {
+        self.legacy_call_with_media(name, payload, None)
+    }
+
+    /// Desktop-owned references are resolved against this installation's media
+    /// catalog before entering the domain transaction. IPC cannot supply these
+    /// objects directly; headless callers without that catalog retain refusal.
+    pub fn legacy_call_with_media(
+        &mut self,
+        name: &str,
+        payload: &Value,
+        media: Option<&[Value]>,
+    ) -> LegacyResult<Value> {
         if name.len() > 100 || !payload.is_object() || payload.to_string().len() > 65_536 {
             return Err(LegacyError::invalid(
                 "Invalid or oversized capability request.",
@@ -316,6 +341,8 @@ impl Store {
                 "attachments",
             ],
             "manager.get" | "manager.history" => &["id"],
+            "manager.attach" => &["id", "attachments"],
+            "manager.merge" => &["id", "into"],
             "manager.list" => &["project", "state", "query", "limit", "offset"],
             "manager.update" => &["id", "changes", "expected_version"],
             "manager.repeat" => &["id", "note"],
@@ -389,7 +416,9 @@ impl Store {
                 json!({"name":"DumbManager Rust","version":env!("CARGO_PKG_VERSION"),"backend":"Rust",
                     "data_dir":data_dir,"counts":{"itch":itches,"context":contexts},"time":time::now_iso()})
             }
-            "manager.capture" => itches::capture(&tx, &args)?,
+            "manager.capture" => itches::capture(&tx, &args, media)?,
+            "manager.attach" => itches::attach(&tx, &args, media)?,
+            "manager.merge" => itches::merge(&tx, &args)?,
             "manager.get" => itches::get(&tx, args.required_text("id", 100)?)?,
             "manager.history" => itches::history(&tx, args.required_text("id", 100)?)?,
             "manager.list" => list(&tx, &args)?,
@@ -487,22 +516,29 @@ fn list(conn: &Connection, args: &Args<'_>) -> LegacyResult<Value> {
     let status = args.text("state", 40)?;
     let query = args.text("query", 500)?.to_lowercase();
     let limit = args.integer("limit", 50, 1, 100)? as usize;
-    let offset = args.integer("offset", 0, 0, 2000)? as usize;
-    let rows = itches::records(conn, Some(2000))?
-        .into_iter()
-        .filter(|row| {
-            (project.is_empty() || row["project"] == project)
-                && (status.is_empty() || row["state"] == status)
-                && query
-                    .split_whitespace()
-                    .all(|word| row.to_string().to_lowercase().contains(word))
-        })
-        .collect::<Vec<_>>();
-    let total = rows.len();
-    Ok(
-        json!({"items":rows.into_iter().skip(offset).take(limit).collect::<Vec<_>>(),"total":total,
-        "limit":limit,"next_offset":if offset+limit<total{Some(offset+limit)}else{None}}),
-    )
+    let offset = args.integer("offset", 0, 0, 1_000_000)? as usize;
+    let mut statement = conn.prepare("SELECT legacy_itches.data FROM legacy_itches JOIN itches USING(id) ORDER BY itches.revision DESC")?;
+    let mut cursor = statement.query([])?;
+    let mut items = Vec::new();
+    let mut total = 0usize;
+    // Stream every row to preserve Unicode/literal search and an honest total,
+    // while retaining only one requested page in memory.
+    while let Some(raw) = cursor.next()? {
+        let row = decode(&raw.get::<_, String>(0)?)?;
+        if (project.is_empty() || row["project"] == project)
+            && (status.is_empty() || row["state"] == status)
+            && query
+                .split_whitespace()
+                .all(|word| row.to_string().to_lowercase().contains(word))
+        {
+            if total >= offset && items.len() < limit {
+                items.push(row);
+            }
+            total += 1;
+        }
+    }
+    Ok(json!({"items":items,"total":total,
+        "limit":limit,"next_offset":if offset+limit<total{Some(offset+limit)}else{None}}))
 }
 
 fn setting(conn: &Connection, key: &str) -> CoreResult<Value> {
@@ -615,7 +651,7 @@ fn brief(conn: &Connection, args: &Args<'_>) -> LegacyResult<Value> {
     if row["feedback"].as_array().is_some_and(|v| !v.is_empty()) {
         brief.push_str(&format!("\n\nSaved feedback: {}", row["feedback"]));
     }
-    brief.push_str("\n\nRecheck current conditions and preserve evidence. Report ready for review; only explicit user acceptance resolves this itch. This Rust build has no external agent connection: copy this brief manually. Do not use the original DumbAPI to update this isolated record.");
+    brief.push_str("\n\nRecheck current conditions and preserve evidence. Report ready for review; only explicit user acceptance resolves this itch. Send through an explicitly configured native T3 connection or copy this brief manually. Do not use the original DumbAPI to update this isolated record.");
     Ok(
         json!({"id":row["id"],"brief":brief,"thread_url":Value::Null,"handoff":"copy_brief",
         "note":"Prepared locally. No thread was opened, verified, or sent a message."}),

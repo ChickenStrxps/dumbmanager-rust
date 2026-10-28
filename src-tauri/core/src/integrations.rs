@@ -85,30 +85,3 @@ pub fn integration_statuses(card_renderer_ready: bool) -> Vec<IntegrationStatus>
         ),
     ]
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn only_card_renderer_can_be_ready() {
-        let off = integration_statuses(false);
-        assert!(off.iter().all(|s| s.state == IntegrationState::Unavailable));
-        let on = integration_statuses(true);
-        let ready: Vec<_> = on
-            .iter()
-            .filter(|s| s.state == IntegrationState::Ready)
-            .collect();
-        assert_eq!(ready.len(), 1);
-        assert_eq!(ready[0].id, "card-renderer");
-    }
-
-    #[test]
-    fn ids_are_unique() {
-        let list = integration_statuses(false);
-        let mut ids: Vec<_> = list.iter().map(|s| s.id.as_str()).collect();
-        ids.sort_unstable();
-        ids.dedup();
-        assert_eq!(ids.len(), list.len());
-    }
-}

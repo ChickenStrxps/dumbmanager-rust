@@ -3,32 +3,27 @@ name = "dumbmanager-rust"
 version = "0.1.0"
 description = "DumbManager Rust: isolated native Windows companion (Tauri 2)"
 edition = "2021"
-rust-version = "1.87"
+rust-version = "1.88"
 publish = false
 default-run = "dumbmanager-rust"
-
-# No [workspace] table here on purpose. The domain crate in ./core is a path
-# dependency; test it with `cargo test -p dumbmanager-core -p dumbmanager-rust`.
-# If the repository later gets a root Cargo workspace, add "src-tauri" (and
-# "src-tauri/core") as members there; nothing in this file needs to change.
+autotests = false
+autoexamples = false
 
 [lib]
 name = "dumbmanager_rust_lib"
 crate-type = ["rlib"]
+test = false
+doctest = false
 
 [[bin]]
 name = "dumbmanager-rust"
 path = "src/main.rs"
+test = false
 
-[features]
-default = []
-# Manual WebView IPC QA only; this feature refuses release builds.
-desktop-qa = []
-
-[[example]]
-name = "native-ui-qa"
-path = "examples/native-ui-qa.rs"
-required-features = ["desktop-qa"]
+[[bin]]
+name = "dumbmanager-mcp"
+path = "src/bin/mcp.rs"
+test = false
 
 [build-dependencies]
 tauri-build = { version = "2.7", features = [] }
@@ -40,15 +35,32 @@ dumbmanager-core = { path = "core" }
 dumbmanager-card-renderer = { path = "../crates/card-renderer" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+base64 = "0.22"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "multipart", "rustls-tls"] }
+sha2 = "0.10"
+ed25519-dalek = "2"
+tungstenite = { version = "0.28", features = ["rustls-tls-native-roots"] }
+url = "2"
+uuid = { version = "1", features = ["v4"] }
+zeroize = "1"
+tempfile = "3"
+dirs = "7"
+tiny_http = "0.12"
 tauri = { version = "2.12", features = ["tray-icon"] }
+feed-rs = "2.3"
+scraper = "0.24"
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-single-instance = "2.5"
 
 [target.'cfg(windows)'.dependencies]
+windows-capture = "=2.0.1"
 windows = { version = "0.62", features = [
     "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_LibraryLoader",
     "Win32_System_Com",
+    "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ] }

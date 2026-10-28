@@ -28,6 +28,11 @@ const fmt = n => n === null || n === undefined ? 'Unknown' : new Intl.NumberForm
 let state={itches:[],contexts:[],preferences:{motion:true}}, view='now', filter='all', selected=null, project='unsorted';
 let stateError='';
 let suggestions=[], suggestionIndex=-1, sources={stats:[],batches:[]}, sourceStatus={}, toastTimer, syncing=false, saving=false;
+let replayCaptureKey='';
+async function beginCaptureReplay(){
+  if(!replayCaptureKey)replayCaptureKey=uid();
+  return replay('begin',{request_key:replayCaptureKey});
+}
 let replayState={}, nativeState={}, replayWindows=[], selectedReplayWindow='', toolResult=null, frameObject=null, lastInputMode='', commandsLoaded=false;
 let renderedDetailId=null, renderedDetailVersion=0, renderedPosting="";
 let outbox;
@@ -392,12 +397,18 @@ async function capture(moment){
   const attachments=moment?[]:DMUploads.itchAttachments;
   const title=moment?'':$('#command').value.trim();if(!title&&!moment&&!attachments.length)return;
   if(title.length>500)return toast('Keep it under 500 characters. Add details after.');
-  const args={title,moment,attachments:JSON.stringify(attachments.map(a=>a.id)),project,context_id:context()?.id||'',context_snapshot:JSON.stringify(context()||{}),use_active:false,event_at:new Date().toISOString(),request_key:uid()};
+  const args={title,moment,attachments:JSON.stringify(attachments.map(a=>a.id)),project,context_id:context()?.id||'',context_snapshot:JSON.stringify(context()||{}),use_active:false,event_at:new Date().toISOString(),request_key:replayCaptureKey||uid()};
   saving=true;$('#stash').disabled=true;DMUploads.render();
   if(!moment){$('#command').value='';updateSuggestions();}
   try{
     let row;
-    try {row=await call('manager.capture',args);}
+    try {
+      // Bind only this explicit native entry to its event; outbox retries retain
+      // the same key/token and cannot consume a later entry's replay.
+      const replayEntry=await replay('begin',{request_key:args.request_key}).catch(()=>null);
+      if(replayEntry?.event_token)args.native_replay_token=replayEntry.event_token;
+      row=await call('manager.capture',args);
+    }
     catch(e){
       if(!e.network)throw e;
       if(outbox.length>=32)throw new Error('App outbox is full. Restore native storage before saving more.');
@@ -406,7 +417,7 @@ async function capture(moment){
     if(!moment)DMUploads.commit('@itch',attachments);
     if(row){merge(row);selected=row.id;render();window.DMAquarium?.celebrate?.('stash',$('#stash'));toast(moment?'THAT. Moment saved.':'Stashed. Back to it.',()=>change(row.id,{state:'archived'}));}
   }catch(e){if(!moment&&!$('#command').value){$('#command').value=title;updateSuggestions();}toast(e.message);}
-  finally{saving=false;DMUploads.render();updateSuggestions();}
+  finally{replayCaptureKey='';saving=false;DMUploads.render();updateSuggestions();}
 }
 function planMarkup(row){
   if(!row.plan.length)return '<p>No plan yet. Send it to T3 to get one.</p>';
@@ -622,7 +633,7 @@ function renderSetup(){
     replay:`<div class="tool-card"><h3>Replay</h3><p>Records a short clip of the app you’re testing so you can show what broke. Pick the window, then turn it on.</p><select id="replay-window" aria-label="Test window">${replayWindows.map(w=>'<option value="'+esc(w.hwnd)+'" '+(selectedReplayWindow===w.hwnd?'selected':'')+'>'+esc(w.title)+'</option>').join('')||'<option value="">Refresh apps to choose one</option>'}</select><div class="detail-actions"><button class="primary" data-action="arm">Turn replay on</button><button class="secondary" data-action="disarm">Turn off</button><button class="secondary" data-action="windows">Refresh apps</button></div><p>6 seconds before · up to 18 during · 6 after. One selected window, no audio. Check the frames: some games may appear blank.</p><details><summary>Storage & capture details</summary><p>640×360 at 10 fps. Temporary boards expire after 24 hours. 20 MiB per event, 256 MiB total; kept boards share a 128 MiB budget.</p></details><p id="replay-error">${esc(replayState.error||'')}</p></div>`,
     appearance:`<div class="tool-card"><h3>Appearance</h3><div class="setting-row"><div><strong>Theme</strong><p>Dark or light.</p></div><button class="secondary" data-action="theme">${document.body.classList.contains('light')?'Switch to dark':'Switch to light'}</button></div><div class="setting-row"><div><strong>Motion</strong><p>Sharks and little animations. Respects reduced motion.</p></div><button class="secondary" data-action="motion">${state.preferences.motion?'Pause motion':'Turn motion on'}</button></div></div>`,
     connections:DMT3.markup(),
-    data:'<div class="tool-card"><h3>Your data</h3><p>Saved locally in DumbManager Rust. Pending stashes stay in this app.</p><button class="secondary" data-action="export">Export my itches</button><details><summary>What powers suggestions?</summary><p>Your pinned task, testing notes and recent messages from the selected T3 thread. Words appear immediately. Mercury 3 finishes unfinished sentences and creates fresh qualities after a typing pause; Jev ranks source matches. Recent selected-thread context and matching ideas are cached briefly. Local word/source matches work offline. Tab accepts; Enter keeps your words.</p></details></div>'
+    data:'<div class="tool-card"><h3>Your data</h3><p>Saved locally in DumbManager Rust. Pending stashes stay in this app.</p><button class="secondary" data-action="export">Export my itches</button><details><summary>What powers suggestions?</summary><p>Local word matches and saved project context work offline. Tap Suggest to send your words and matching saved context to Mercury 2. Typing alone stays local. Jev receives the text supplied to explicit decisions and duplicate checks. Saving a key does not test its connection. Tab accepts; Enter keeps your words.</p></details></div>'
   };
   content.posting=DMWebhook.settingsMarkup();
   content.ai=DMAI.settingsMarkup();
@@ -656,7 +667,7 @@ function renderShortcuts(){
 async function nativeControl(action='status'){
   if(action==='status'&&(view!=='setup'||settingsTab!=='shortcuts'))return;
   if(nativeBusy)return;nativeBusy=true;renderShortcuts();
-  try{nativeState=await post('/api/native',{action});renderShortcuts();}
+  try{nativeState=await post('/api/native',{action});if(action==='snip')await window.DMNativeDesktop?.accept(nativeState);renderShortcuts();}
   catch(e){nativeState={running:false,note:e.message};toast(e.message);}
   finally{nativeBusy=false;renderShortcuts();clearTimeout(nativeTimer);if(view==='setup'&&settingsTab==='shortcuts')nativeTimer=setTimeout(()=>nativeControl(),nativeState.test_remaining?1000:5000);}
 }
@@ -744,9 +755,9 @@ document.addEventListener('click',async e=>{
     if(target.dataset.action)return await action(target.dataset.action);
   }catch(error){toast(error.message);}
 });
-$('#command').addEventListener('input',updateSuggestions);
-$('#command').addEventListener('focus',()=>{replay('begin').catch(()=>{});updateSuggestions();});
-$('#command').addEventListener('blur',()=>{DMIntake.cancelSuggestions();setTimeout(()=>{$('#suggestions').hidden=true;$('#command').setAttribute('aria-expanded','false');},160);});
+$('#command').addEventListener('input',()=>{beginCaptureReplay().catch(()=>{});updateSuggestions();});
+$('#command').addEventListener('focus',()=>{beginCaptureReplay().catch(()=>{});updateSuggestions();});
+$('#command').addEventListener('blur',()=>{const key=replayCaptureKey;setTimeout(()=>{if(!saving&&document.activeElement!==$('#command')&&replayCaptureKey===key){replayCaptureKey='';replay('cancel',{request_key:key}).catch(()=>{});}},200);DMIntake.cancelSuggestions();setTimeout(()=>{$('#suggestions').hidden=true;$('#command').setAttribute('aria-expanded','false');},160);});
 $('#command').addEventListener('keydown',async e=>{
   try{
     if(e.key==='ArrowDown'||e.key==='ArrowUp'){if(!suggestions.length)return;e.preventDefault();suggestionIndex=(suggestionIndex+(e.key==='ArrowDown'?1:-1)+suggestions.length)%suggestions.length;drawSuggestions();}

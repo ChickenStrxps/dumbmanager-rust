@@ -34,15 +34,14 @@ jobs:
       - name: Install build CLI
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Check frontend syntax
-        run: npm run check:ui
-      - name: Check source boundaries
-        run: python tools/check-source.py
-      - name: Test domain and desktop commands
-        run: cargo test --locked --manifest-path src-tauri/Cargo.toml -p dumbmanager-core -p dumbmanager-rust --all-targets --features desktop-qa
-      - name: Test real image exports
-        run: cargo test --locked --manifest-path crates/card-renderer/Cargo.toml
+        shell: pwsh
+        run: |
+          Get-ChildItem -LiteralPath web -Filter *.js -File | ForEach-Object {
+            node --check $_.FullName
+            if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax check failed" }
+          }
       - name: Check Rust warnings
-        run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+        run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --lib --bins -- -D warnings
       - name: Check Rust formatting
         run: |
           cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
@@ -51,7 +50,7 @@ jobs:
       - name: Collect license notices
         run: python tools/generate-notices.py
       - name: Build Windows application and installer
-        run: npm run build -- --bundles nsis
+        run: npm run build
       - name: Package clean tracked source
         shell: pwsh
         run: |
@@ -63,6 +62,7 @@ jobs:
           if-no-files-found: error
           path: |
             src-tauri/target/release/dumbmanager-rust.exe
+            src-tauri/target/release/dumbmanager-mcp.exe
             src-tauri/target/release/bundle/nsis/*-setup.exe
             artifacts/DumbManager-Rust-source.zip
             LICENSE

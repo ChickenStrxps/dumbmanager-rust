@@ -145,7 +145,7 @@ window.DMSocial=(()=>{
   const eligible=r=>['ready','resolved'].includes(r.state);
   let tracking=null,trackingError='',handlesLoading=false,scanBusy=false,scanNote='',handleTimer=null,trackSignature='',postingBusy=false,postError='',lastPostCheck=0,linkText='',postReviewKey='',postReviewOpen=false;
   const platformName=s=>({x:'X',youtube:'YouTube',tiktok:'TikTok',bluesky:'Bluesky'})[s]||s||'Social';
-  const basisName=s=>({exact_caption:'Full caption match',formatted_caption:'Caption matches after formatting',changelog_body:'Headline + changes match',user_linked_capture:'Linked by you',ambiguous_caption:'Caption shared by multiple itches',headline_only:'Title only; review the details'})[s]||'Saved post evidence';
+  const basisName=s=>({exact_caption:'Full caption match',formatted_caption:'Caption matches after formatting',changelog_body:'Headline + changes match',user_linked_capture:'Linked by you',user_confirmed_url:'Linked by you; not verified',ambiguous_caption:'Caption shared by multiple itches',headline_only:'Title only; review the details'})[s]||'Saved post evidence';
   function postDate(value,time=false){
     if(!value)return '';
     const day=typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value),d=new Date(typeof value==='number'?value*1000:value);
@@ -164,7 +164,7 @@ window.DMSocial=(()=>{
       const note=[platformName(first.platform),first.account,basisName(first.basis||'headline_only')].filter(Boolean).join(' · ');
       return {label:`${n} match${n===1?'':'es'} to review`,note,kind:'possible',hint:note+'. Open the captured post before linking it.'};
     }
-    if(!p.checked_at)return {label:'Not checked',note:'Check posts to look in AnalyticsOne',kind:'unchecked',hint:'No comparison with captured posts has run yet.'};
+    if(!p.checked_at)return {label:'No linked post',note:'Add a URL after posting',kind:'unchecked',hint:'This app keeps links you confirm. It does not scan your accounts.'};
     const note=[checked,p.coverage?.own_posts!=null?`${p.coverage.own_posts} captured own posts`:'Captured posts only',p.coverage?.partial?'Check limit reached':''].filter(Boolean).join(' · ');
     return {label:p.unlinked_at?'No linked post':'No match in captures',note,kind:'unconfirmed',hint:note+'. Missing captures do not prove it was never posted.'};
   }
@@ -225,12 +225,13 @@ window.DMSocial=(()=>{
     const reviewKey=JSON.stringify([draft.itch_id,p.state,candidates.map(s=>[s.key,s.basis])]);
     if(reviewKey!==postReviewKey){postReviewKey=reviewKey;postReviewOpen=p.state==='possible';}
     const source=s=>`<div class="post-source"><a class="text-link" href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(platformName(s.platform))} · ${esc(s.account)} ↗</a><span>${esc([s.published_at?'Posted '+postDate(s.published_at):'',basisName(s.basis)].filter(Boolean).join(' · '))}</span><span class="muted">${esc([s.captured_at?'Captured '+postDate(s.captured_at,true):'',s.seen_in_latest_check===false?'Saved evidence; absent from latest captures':''].filter(Boolean).join(' · '))}</span></div>`;
-    const coverageText=p.checked_at?`${coverage?.own_posts!=null?coverage.own_posts+' captured own posts compared. ':''}Checked ${postDate(p.checked_at,true)}. ${coverage?.partial?'The 2,000-record check limit was reached. ':''}Saved captures only; full account history may be missing.`:'Check posts compares saved AnalyticsOne captures. It does not start a new handle scan.';
-    return `<section class="social-posting" aria-label="Posting status"><div class="tool-launch">${badge({state:'ready',posting:p})}<button class="quiet" data-social="check-posts" ${postingBusy?'disabled':''}>${postingBusy?'Checking…':'Check posts ↻'}</button></div>${postError?`<small role="alert">${esc(postError)}</small>`:''}<p class="posting-coverage">${esc(coverageText)} <button class="text-link" data-social="handles">Scan handles ↗</button></p>${p.posts?.length?`<div class="post-sources">${p.posts.map(source).join('')}<button class="quiet" data-social="unlink">Unlink</button></div>`:''}${coverage?.accounts?.length?`<details class="tool-fold posting-accounts"><summary>Capture coverage</summary>${coverage.accounts.map(a=>`<p>${esc(platformName(a.platform)+' · '+a.name+' · '+a.own_posts+' saved posts')}${a.last_capture?`<br><span class="muted">Account captured ${esc(postDate(a.last_capture,true))}</span>`:''}</p>`).join('')}</details>`:''}<details class="tool-fold post-review" ${p.state==='possible'?'open':''}><summary>${p.state==='possible'?'Review matches':'Link a posted URL'}</summary>${candidates.map(s=>`<div class="post-candidate"><div class="post-candidate-copy"><a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(platformName(s.platform)+' · '+s.account)} ↗</a><small>${esc(basisName(s.basis||'headline_only'))}${s.published_at?' · Posted '+esc(postDate(s.published_at)):''}</small><blockquote>${esc(s.title)}</blockquote></div><button class="secondary" data-post-link="${esc(s.url)}" ${postingBusy?'disabled':''}>This is it</button></div>`).join('')}${p.candidate_count>candidates.length?`<small>Showing ${candidates.length} of ${p.candidate_count} matches.</small>`:''}<form id="social-post-link" class="tool-search"><label class="sr" for="social-post-url">Posted URL</label><input id="social-post-url" type="url" placeholder="Paste your post URL…" value="${esc(linkText)}"><button class="secondary" ${postingBusy?'disabled':''}>Link</button></form><small>Link a captured post from your own handle. Scan the handle if it is missing.</small></details></section>`;
+    const coverageText='Saved links only. You confirm each URL; this app does not verify ownership or scan external accounts.';
+    return `<section class="social-posting" aria-label="Posting status"><div class="tool-launch">${badge({state:'ready',posting:p})}<button class="quiet" data-social="check-posts" ${postingBusy?'disabled':''}>${postingBusy?'Checking…':'Check posts ↻'}</button></div>${postError?`<small role="alert">${esc(postError)}</small>`:''}<p class="posting-coverage">${esc(coverageText)} <button class="text-link" data-social="handles">Scan handles ↗</button></p>${p.posts?.length?`<div class="post-sources">${p.posts.map(source).join('')}<button class="quiet" data-social="unlink">Unlink</button></div>`:''}${coverage?.accounts?.length?`<details class="tool-fold posting-accounts"><summary>Capture coverage</summary>${coverage.accounts.map(a=>`<p>${esc(platformName(a.platform)+' · '+a.name+' · '+a.own_posts+' saved posts')}${a.last_capture?`<br><span class="muted">Account captured ${esc(postDate(a.last_capture,true))}</span>`:''}</p>`).join('')}</details>`:''}<details class="tool-fold post-review" ${p.state==='possible'?'open':''}><summary>${p.state==='possible'?'Review matches':'Link a posted URL'}</summary>${candidates.map(s=>`<div class="post-candidate"><div class="post-candidate-copy"><a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(platformName(s.platform)+' · '+s.account)} ↗</a><small>${esc(basisName(s.basis||'headline_only'))}${s.published_at?' · Posted '+esc(postDate(s.published_at)):''}</small><blockquote>${esc(s.title)}</blockquote></div><button class="secondary" data-post-link="${esc(s.url)}" ${postingBusy?'disabled':''}>This is it</button></div>`).join('')}${p.candidate_count>candidates.length?`<small>Showing ${candidates.length} of ${p.candidate_count} matches.</small>`:''}<form id="social-post-link" class="tool-search"><label class="sr" for="social-post-url">Posted URL</label><input id="social-post-url" type="url" placeholder="Paste your post URL…" value="${esc(linkText)}"><button class="secondary" ${postingBusy?'disabled':''}>Link</button></form><small>Link your published X, TikTok or YouTube URL. Your confirmation is saved with the link.</small></details></section>`;
   }
   async function linkPost(url){
+    if(!window.confirm('Confirm this URL is your published post. This records your confirmation; it does not independently verify the account or post.'))return;
     if(postingBusy||!draft)return;const itch_id=draft.itch_id;postingBusy=true;postError='';render();
-    try{const answer=await call('manager.social.link',{itch_id,url});linkText='';applyPosting(answer.items);}
+    try{const answer=await call('manager.social.link',{itch_id,url,confirm:true});linkText='';applyPosting(answer.items);}
     catch(e){postError=e.message;}
     finally{postingBusy=false;render();}
   }
@@ -253,11 +254,11 @@ window.DMSocial=(()=>{
     }catch{return null;}finally{bitmap?.close();}
   }
   const freshGif=()=>gif&&draft&&gif.meta.draft_id===draft.id&&gif.meta.version===draft.version&&(gif.meta.digest??null)===(draft.image?.digest??null)&&gif.meta.vibe===variant(draft.id).vibe&&(gif.meta.requested_theme||'')===variant(draft.id).theme?gif:null;
-  const desktopClipboard=()=>['127.0.0.1','localhost'].includes(location.hostname)&&!matchMedia('(pointer:coarse)').matches;
+  const desktopClipboard=()=>!!window.__TAURI__||['127.0.0.1','localhost'].includes(location.hostname)&&!matchMedia('(pointer:coarse)').matches;
   const gifCopy=()=>desktopClipboard()&&freshGif();
   function copyGif(snapshot,checked){
     const live=snapshot.gif;
-    return checked.then(()=>call('manager.social.gif_copy',{id:snapshot.id,expected_version:snapshot.version,vibe:live.meta.vibe,theme:live.meta.requested_theme||''}));
+    return checked.then(()=>call('manager.social.gif_copy',{id:snapshot.id,expected_version:snapshot.version,vibe:live.meta.vibe,theme:live.meta.requested_theme||'',sha256:live.meta.sha256}));
   }
   const EVENT_NAMES={greg:'Greg spotted',lightning:'lightning',flicker:'flicker'};
   async function animate(){

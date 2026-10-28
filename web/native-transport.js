@@ -3,6 +3,7 @@
 // Keep the original UI's HTTP-shaped API local to this app. Asset fetches keep
 // their browser implementation; no legacy API request falls through to a server.
 (() => {
+  if (window.DMRemote === true) return;
   const assetFetch = window.fetch.bind(window);
   const json = (value, status = 200) => new Response(JSON.stringify(value ?? null), {
     status,
@@ -12,6 +13,38 @@
     error: 'Local data requires the DumbManager Rust desktop app.',
     code: 'native_unavailable'
   }, 503);
+
+  const UPLOAD_LIMIT = 50 * 1024 * 1024;
+  function header(request, name) {
+    const value = request.headers.get(name) || '';
+    try { return decodeURIComponent(value); } catch { return value; }
+  }
+  async function upload(request) {
+    const blob = await request.blob();
+    if (!blob.size || blob.size > UPLOAD_LIMIT) {
+      throw {error: 'Choose a nonempty file no larger than 50 MiB.', code: 'invalid_upload', status: 413};
+    }
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result).split(',', 2)[1]);
+      reader.onerror = () => reject({error: 'The file could not be read.', code: 'invalid_upload', status: 400});
+      reader.readAsDataURL(blob);
+    });
+    return {base64, filename: header(request, 'X-File-Name'),
+      mime_type: header(request, 'X-File-Type') || blob.type || 'application/octet-stream',
+      thread_id: header(request, 'X-Thread-Id'), video_mode: header(request, 'X-Video-Mode'),
+      t3_target: header(request, 'X-T3-Target')};
+  }
+  function response(value) {
+    if (value?.__native_binary === true) {
+      const raw = atob(value.base64);
+      const bytes = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+      return new Response(bytes, {status: value.status || 200,
+        headers: {'Content-Type': value.mime_type || 'application/octet-stream', 'Cache-Control': 'no-store'}});
+    }
+    return json(value);
+  }
 
   function failure(error) {
     let detail = error;
@@ -41,12 +74,18 @@
     const request = new Request(input, init);
     request.signal.throwIfAborted();
     const type = request.headers.get('Content-Type') || '';
-    if (request.body && !/^application\/(?:[\w.+-]+\+)?json(?:\s*;|\s*$)/i.test(type)) {
-      return json({error: 'Native file uploads are unavailable in this build.', code: 'native_upload_unavailable'}, 415);
-    }
     let payload;
-    try { payload = JSON.parse((await request.text()) || '{}'); }
-    catch { return json({error: 'The native API requires a JSON object.', code: 'invalid_payload'}, 400); }
+    try {
+      if (url.pathname === '/api/upload' || url.pathname === '/api/itch-upload') payload = await upload(request);
+      else {
+        if (request.body && !/^application\/(?:[\w.+-]+\+)?json(?:\s*;|\s*$)/i.test(type)) {
+          return json({error: 'This native API requires JSON.', code: 'invalid_payload'}, 415);
+        }
+        payload = JSON.parse((await request.text()) || '{}');
+      }
+    } catch (error) {
+      return error?.status ? failure(error) : json({error: 'The native API requires a JSON object.', code: 'invalid_payload'}, 400);
+    }
     request.signal.throwIfAborted();
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
       return json({error: 'The native API requires a JSON object.', code: 'invalid_payload'}, 400);
@@ -61,7 +100,14 @@
       if (request.signal.aborted) abort();
     });
     const operation = (async () => {
-      try { return json(await invoke('legacy_api', {path: url.pathname + url.search, payload})); }
+      try {
+        const callNative = (name, args) => invoke('legacy_api', {path: '/api/call', payload: {name, args}});
+        const value = url.pathname === '/api/call' && !url.search && payload.name === 'manager.social.gif'
+          && window.DMNativeCards
+          ? await window.DMNativeCards.gif(payload.args || {}, callNative, {signal: request.signal})
+          : await invoke('legacy_api', {path: url.pathname + url.search, payload});
+        return response(value);
+      }
       catch (error) { return failure(error); }
     })();
     try { return await Promise.race([operation, aborted]); }

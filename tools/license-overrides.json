@@ -21,15 +21,22 @@
   "dlopen2_derive@0.4.3": [
     "licenses/upstream/dlopen2/LICENSE"
   ],
+  "fxhash@0.2.1": [
+    "licenses/upstream/cesu8/LICENSE-APACHE-2.0.txt",
+    "licenses/upstream/fxhash/NOTICE.txt"
+  ],
   "jni-sys-macros@0.4.1": [
     "licenses/upstream/jni-sys/LICENSE-MIT"
   ],
   "libappindicator-sys@0.9.0": [
     "licenses/upstream/libappindicator-rs/LICENSE-MIT"
   ],
-  "ndk@0.9.0": [
-    "licenses/upstream/ndk/LICENSE-MIT",
-    "licenses/upstream/ndk/NOTICE.txt"
+  "mac@0.1.1": [
+    "licenses/upstream/cesu8/LICENSE-APACHE-2.0.txt",
+    "licenses/upstream/mac/NOTICE.txt"
+  ],
+  "match_token@0.35.0": [
+    "licenses/upstream/html5ever/LICENSE-MIT"
   ],
   "ndk-context@0.1.1": [
     "licenses/upstream/ndk/LICENSE-MIT",
@@ -39,9 +46,9 @@
     "licenses/upstream/ndk/LICENSE-MIT",
     "licenses/upstream/ndk/NOTICE.txt"
   ],
-  "objc2@0.6.5": [
-    "licenses/upstream/objc2/LICENSE-MIT.txt",
-    "licenses/upstream/objc2/LICENSE.md"
+  "ndk@0.9.0": [
+    "licenses/upstream/ndk/LICENSE-MIT",
+    "licenses/upstream/ndk/NOTICE.txt"
   ],
   "objc2-app-kit@0.3.2": [
     "licenses/upstream/objc2/LICENSE-MIT.txt",
@@ -107,6 +114,10 @@
     "licenses/upstream/objc2/LICENSE-MIT.txt",
     "licenses/upstream/objc2/LICENSE.md"
   ],
+  "objc2@0.6.5": [
+    "licenses/upstream/objc2/LICENSE-MIT.txt",
+    "licenses/upstream/objc2/LICENSE.md"
+  ],
   "r-efi@5.3.0": [
     "licenses/upstream/r-efi/5.3.0/AUTHORS"
   ],
@@ -116,17 +127,21 @@
   "rsqlite-vfs@0.1.1": [
     "licenses/upstream/sqlite-wasm-rs/LICENSE"
   ],
+  "selectors@0.31.0": [
+    "licenses/upstream/selectors/MPL-2.0.txt",
+    "licenses/upstream/selectors/0.31.0-NOTICE.txt"
+  ],
   "selectors@0.38.0": [
     "licenses/upstream/selectors/MPL-2.0.txt",
     "licenses/upstream/selectors/NOTICE.txt"
-  ],
-  "webview2-com@0.39.1": [
-    "licenses/upstream/webview2-rs/LICENSE"
   ],
   "webview2-com-macros@0.8.1": [
     "licenses/upstream/webview2-rs/LICENSE"
   ],
   "webview2-com-sys@0.39.1": [
+    "licenses/upstream/webview2-rs/LICENSE"
+  ],
+  "webview2-com@0.39.1": [
     "licenses/upstream/webview2-rs/LICENSE"
   ],
   "winapi-i686-pc-windows-gnu@0.4.0": [
