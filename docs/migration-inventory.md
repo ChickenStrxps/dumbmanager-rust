@@ -1,105 +1,56 @@
-# Migration inventory: first native milestone
+# Native migration inventory
 
-This is an implementation inventory, not a claim of 1:1 parity. The native
-backend does not open, copy, change, or contact the existing Python projects,
-accounts, settings, tokens, hotkeys, ports, startup state, or runtime records.
-Backend validation uses newly created temporary state.
-The original frontend is now bundled with its existing layout, fonts, navigation,
-dialogs and full-page ASCII creatures. Its local capture and review handlers
-were followed into the original API contracts and implemented in Rust. This is
-not a full audit or port of every service. See the precise
-[compatibility inventory](original-ui-backend.md).
+This is an implementation inventory, not a claim of complete parity. The Rust
+app has its own identity, SQLite database, WebView profile and credentials.
+Existing DumbManager, DumbAPI, T3 and Knife installations remain independent.
+No listener, global shortcut or capture starts automatically.
 
-## Implemented in Rust
+## Implemented
 
-- Independent Tauri 2 Windows shell with DumbManager Rust identity,
-  `io.dumbmanager.rust`, `dumbmanager-rust.exe`, an owned WebView2 profile,
-  independent tray/single-instance identity, and NSIS packaging configuration.
-- Fresh, empty native SQLite storage. No seeded runtime records or imported
-  credentials. Own application ID/schema, WAL durability, atomic writes, foreign
-  database refusal, and temporary-state tests.
-- Itch create/edit/read/list; bug/improvement/idea kinds; project/default-project
-  handling; literal case-insensitive text search; exact project/status filters;
-  newest-update ordering; and genuine counts for Open/Stashed/Ready/Resolved.
-- Explicit review/status workflow. The smaller native API requires Ready before
-  Resolved. The original compatibility API also permits explicit acceptance of
-  a described open itch, matching the original application. Editing,
-  rendering, reload, restart, and settings saves do not accept work. Resolved
-  items can reopen to Open. Local audit events persist with each mutation.
-- Explicit headless transactional deletion with cascading local history cleanup.
-  Deletion is not exposed through the first milestone's desktop IPC contract.
-- Settings persistence for full/reduced/off motion, midnight theme, and default
-  project. Unknown fields and invalid values are rejected; multi-field saves
-  are atomic even when SQLite fails partway through the transaction.
-- Real in-process GIF/PNG card exports through the native renderer, two-slot
-  concurrency bound, fixed export folder, file validation, fresh filenames,
-  and no network/posting action.
-- Fixed-folder Explorer command and tray action, configured for desktop QA.
-- Local-only IPC capabilities, CSP, blocked remote navigation/popups, and no
-  browser page access to arbitrary filesystem/shell operations.
-- Original-contract capture and moments, full detail/edit fields, four-step
-  plans with stable IDs, feedback, evidence notes, version conflicts, atomic
-  retries and real mutation history. No earlier history is invented during the
-  schema-v2 upgrade.
-- User-authored local context notes and preserved historical capture snapshots;
-  copyable local briefs and prefix suggestions from saved titles. These do not
-  connect or verify a T3 destination, discover projects, or invoke a provider.
-- Original boolean motion setting and original WebView page/filter/dialog
-  restoration. Native WebView checks verified capture, edit, plan persistence,
-  review cancellation and return to the same open itch after reload.
-- Headless core tests and a console native-service QA executable using a new
-  OS-temp child. It exercises persistence, filtering, review and real export
-  without opening normal app data or a WebView.
+- Original frontend layout, fonts, dialogs, navigation and ASCII background.
+- SQLite capture, moments, edits, stashing, explicit acceptance, history,
+  transactionally merged duplicates, Unicode search, pagination and retry keys.
+- App-owned image/video uploads, original-byte retrieval and configurable
+  FFmpeg/FFprobe frameboards. Windows OCR, crop/mask flattening and sanitized
+  work images feed the original card flow.
+- Social drafts, original frozen WebView GIF artwork, deterministic still cards,
+  exact-preview GIF selection, explicit clipboard handoff and webhook receipts.
+- Explicit T3 pairing, registered projects, bounded thread reads, previews,
+  attachments, chat sends and itch/research handoffs with retry-safe receipts.
+- Git operations on explicitly registered roots; configured isolated Chromium
+  Browse sessions; Mercury/Jev settings and structured judgments; research,
+  learning, source-bounded scouting and selected inspiration sources.
+- OpenAI/Gemini session provisioning, scoped tool approvals and a stdio MCP
+  console. Unconfigured integrations remain unconfigured.
+- Opt-in phone HTTP listener with one-time invitations, HttpOnly sessions,
+  CSRF/Host/Origin checks and a restricted itch/chat capability surface.
+- Explicitly enabled global shortcuts, screen-region snipping into local evidence,
+  and user-facing shortcut diagnostics. The new selector passes compiler checks;
+  its interrupted UI check still needs to be completed.
 
-## Explicit gaps
+## Still required before full replacement
 
-- **T3 threads and agents:** no live thread discovery, context publication,
-  selection, dispatch, implementation rounds, review orchestration, or agent
-  sends. No inferred connection to an existing T3 session.
-- **Git and pull requests:** no checkout/worktree discovery, GitHub accounts,
-  branch management, commit/push, PR creation/review/merge, or automatic status
-  synchronization.
-- **Browser automation:** the local WebView displays the UI. It is not an
-  automation connection to another browser or the original app's browser
-  profile. No remote page controls or browser-task migration is implemented.
-- **Jev / TypeSafe:** no configured model endpoint, credentials, structured
-  judgments, verification, or routing. No model success is simulated.
-- **Mercury / Inception:** no connection, streaming, model selection, inference,
-  or migrated provider configuration.
-- **Discord / DumbBridge / webhooks:** no account, token, webhook destination,
-  board synchronization, message send, image post, or Discord bot. Export only
-  creates a local file.
-- **Scout:** no automated discovery, background scouting, ingestion, deduping,
-  polling, or generated records.
-- **Phone companion:** no listener, pairing URL/QR, invitation, remote actions,
-  mobile share state, inherited port, or network token.
-- **Voice:** no microphone permission, capture, transcription, voice hotkey,
-  model connection, or automatic submission.
-- **AnalyticsOne and metrics integrations:** no live account/service stats or
-  historical analytics migration. Local counts describe this app's own stored
-  itches only.
-- **Data migration:** no import/merge/export of the Python database, account
-  settings, secrets, history, attachments, runtime jobs, or legacy card cache.
-  Existing data remains in its existing installation.
-- **Additional domain surfaces:** no delete IPC, attachment store, reminders,
-  scheduling, multi-user sync, cloud backup, exposed history browser or full-text
-  index. Original state reads include the latest 500 itches and 80 contexts;
-  list pagination searches the most recent 2,000 itches, with 100 per page.
-- **Renderer coverage:** no full Unicode typography or runtime system-font
-  loading. Native artwork is an independent visual implementation; visual or
-  pixel parity with legacy cards is not claimed.
-- **Original Social flow:** native GIF/PNG export exists through IPC and the
-  local manager.card_export extension. The original Social draft, preview,
-  sharing and clipboard service has not been connected to those exports.
-- **Desktop acceptance:** original-interface WebView capture, edit, reload and
-  review cancellation have been checked. The independent installer, shortcuts,
-  title/taskbar icon and Explorer opening were checked in the earlier shell.
-  Installer rebuild/upgrade with the restored frontend, tray interaction,
-  uninstall, broad accessibility and whole-app performance remain separate
-  checks. Compilation alone does not establish them.
+- Selected-window replay capture and final snipping UI verification.
+- Signed Discord interaction routing and its end-to-end message workflows.
+- Complete learning-topic parity. The original public RSS and TypeSafe blog
+  adapters are now implemented; captured X still needs a configured source.
+- GitHub pull-request flow and any original capability not in the native registry.
+- Final native UI, installer, microphone, clipboard-paste and real FFmpeg checks.
+- Independent review and user visual review of the integrated release candidate.
 
-The backend reports migrated native card export as available and every listed
-external integration as unavailable. There are no pretend connections,
-simulated agents, fabricated live jobs, or success responses for these gaps.
-Future integrations need explicit configuration, narrow permissions, real
-implementation and tests before their runtime state may become available.
+Configured adapters have primarily been checked with isolated local fixtures;
+that does not establish live provider, T3, Discord, phone or proxy compatibility.
+No production message, webhook, account adoption or deployment was used for QA.
+
+## Verification and repository contents
+
+The integrated service suite passed 67 checks before removal. The renderer
+passed nine checks plus a separately invoked real Windows OCR check. Eight
+loopback HTTP checks exercised pairing, access boundaries, capture/retry and
+upload against a temporary native app. Compile-time checks still pass after
+removal. Earlier core checks covered persistence, concurrency and original API
+contracts. These results apply to their recorded scope, not every later change.
+
+At the owner's request, development test suites, smoke scripts, benchmarks,
+fixture runners and QA-only executable entries are no longer in the repository.
+App artwork, build files and mandatory dependency licenses remain.

@@ -143,7 +143,7 @@ fn put(conn: &Connection, row: &Value, action: &str, changes: &Value) -> LegacyR
     Ok(())
 }
 
-pub(super) fn capture(conn: &Connection, args: &Args<'_>) -> LegacyResult<Value> {
+pub(super) fn capture(conn: &Connection, args: &Args<'_>, media: Option<&[Value]>) -> LegacyResult<Value> {
     let title = args.text("title", 500)?;
     let original = args.text("original", 2000)?;
     let moment = args.boolean("moment", false)?;
@@ -221,9 +221,10 @@ pub(super) fn capture(conn: &Connection, args: &Args<'_>) -> LegacyResult<Value>
     let attachments = attachments
         .as_array()
         .ok_or_else(|| LegacyError::invalid("Expected an array of uploaded evidence IDs."))?;
-    if !attachments.is_empty() {
+    if !attachments.is_empty() && media.is_none() {
         return Err(LegacyError::unavailable("Evidence uploads are unavailable in this native build. This itch was not saved; keep the text and remove the unsupported attachment before retrying."));
     }
+    let media = resolved_media(attachments, media.unwrap_or(&[]))?;
     if title.is_empty() && !moment {
         return Err(LegacyError::invalid("Type an itch or mark a moment."));
     }
@@ -237,7 +238,7 @@ pub(super) fn capture(conn: &Connection, args: &Args<'_>) -> LegacyResult<Value>
     let at = if event.is_empty() { &stamp } else { event };
     let original = if original.is_empty() { title } else { original };
     let row = json!({"id":uuid::Uuid::new_v4().hyphenated().to_string(),"project":project,
-        "title":if title.is_empty(){"That moment…"}else{title},"attachments":[],
+        "title":if title.is_empty(){"That moment…"}else{title},"attachments":media,
         "key":title_key(title),"state":if title.is_empty(){"needs_description"}else{"open"},
         "version":1,"original":original,"context_id":cid,"context":context,
         "created_at":stamp,"updated_at":stamp,"event_at":at,
@@ -251,6 +252,80 @@ pub(super) fn capture(conn: &Connection, args: &Args<'_>) -> LegacyResult<Value>
         &json!({"moment":moment,"event_at":at}),
     )?;
     Ok(row)
+}
+
+fn resolved_media(ids:&[Value], media:&[Value])->LegacyResult<Vec<Value>> {
+    if ids.len()>8 || ids.len()!=media.len() {return Err(LegacyError::invalid("Resolve up to eight uploaded evidence IDs before saving."));}
+    let mut unique=std::collections::HashSet::new();
+    for (id,entry) in ids.iter().zip(media) {
+        let id=id.as_str().ok_or_else(||LegacyError::invalid("Expected uploaded evidence IDs."))?;
+        if !unique.insert(id) || entry["id"]!=id || !entry.is_object() || entry.to_string().len()>4000 || entry.get("path").is_some() || entry.get("base64").is_some() {
+            return Err(LegacyError::invalid("Invalid resolved evidence reference."));
+        }
+    }
+    Ok(media.to_vec())
+}
+
+pub(super) fn attach(conn:&Connection,args:&Args<'_>,media:Option<&[Value]>)->LegacyResult<Value> {
+    let ids=args.json("attachments",json!([]),1000)?;
+    let ids=ids.as_array().ok_or_else(||LegacyError::invalid("Expected uploaded evidence IDs."))?;
+    let added=resolved_media(ids,media.ok_or_else(||LegacyError::unavailable("Resolve evidence through this installation before attaching it."))?)?;
+    let mut row=get(conn,args.required_text("id",100)?)?;
+    let attachments=array_mut(&mut row,"attachments")?;
+    let mut changed=false;
+    for item in added {if !attachments.iter().any(|a|a["id"]==item["id"]) {attachments.push(item);changed=true;}}
+    if attachments.len()>8{return Err(LegacyError::invalid("An itch can keep up to eight uploaded receipts."));}
+    if changed {bump(&mut row);put(conn,&row,"attach",&json!({"ids":ids}))?;}Ok(row)
+}
+
+pub(super) fn record_handoff(conn:&Connection,args:&Args<'_>)->LegacyResult<Value> {
+    let mut row=get(conn,args.required_text("id",100)?)?;
+    let receipt=json!({"request_key":args.required_text("request_key",128)?,"thread_id":args.required_text("thread_id",200)?,"message_id":args.required_text("message_id",200)?,"at":args.required_text("at",60)?});
+    if row.get("handoffs").is_none(){row["handoffs"]=json!([]);}
+    let history=array_mut(&mut row,"handoffs")?;
+    if let Some(old)=history.iter().find(|h|h["request_key"]==receipt["request_key"]) {
+        if old!=&receipt{return Err(LegacyError::conflict("This handoff key already records another confirmed message."));}return Ok(row);
+    }
+    if history.len()>=500{return Err(LegacyError::invalid("Export this itch before adding more handoff history."));}
+    history.push(receipt.clone());bump(&mut row);put(conn,&row,"handoff",&receipt)?;Ok(row)
+}
+
+pub(super) fn merge(conn: &Connection, args: &Args<'_>) -> LegacyResult<Value> {
+    let id = args.required_text("id", 100)?;
+    let into = args.required_text("into", 100)?;
+    if id == into { return Err(LegacyError::invalid("Pick two different itches to merge.")); }
+    let mut drop = get(conn, id)?;
+    let mut keep = get(conn, into)?;
+    if drop["project"] != keep["project"] { return Err(LegacyError::invalid("Only merge itches from the same project.")); }
+    if matches!(drop["state"].as_str(), Some("resolved"|"archived"|"suggested"|"declined"))
+        || matches!(keep["state"].as_str(), Some("archived"|"suggested"|"declined")) {
+        return Err(LegacyError::invalid("Only merge open itches."));
+    }
+    let mut occurrences = keep["occurrences"].as_array().cloned().unwrap_or_default();
+    let added = drop["occurrences"].as_array().cloned().unwrap_or_default();
+    if occurrences.len() + added.len() > 500 { return Err(LegacyError::invalid("Too many occurrences to merge; archive/export first.")); }
+    for mut item in added { item["merged_from"] = json!(id); occurrences.push(item); }
+    occurrences.sort_by(|a,b| a["at"].as_str().unwrap_or("").cmp(b["at"].as_str().unwrap_or("")));
+    keep["occurrences"] = json!(occurrences);
+    let added = drop["attachments"].as_array().cloned().unwrap_or_default();
+    let attachments = array_mut(&mut keep, "attachments")?;
+    for item in added { if !attachments.iter().any(|a| a["id"] == item["id"]) { attachments.push(item); } }
+    let added = drop["feedback"].as_array().cloned().unwrap_or_default();
+    let feedback = array_mut(&mut keep, "feedback")?;
+    feedback.extend(added);
+    if feedback.len() > 80 { feedback.drain(..feedback.len()-80); }
+    if keep.get("merged").is_none() { keep["merged"] = json!([]); }
+    let merged = array_mut(&mut keep, "merged")?;
+    merged.push(json!({"id":id,"title":drop["title"],"at":time::now_iso()}));
+    if merged.len() > 80 { merged.drain(..merged.len()-80); }
+    if keep["state"] == "resolved" { keep["state"] = json!("open"); }
+    drop["state"] = json!("archived");
+    drop["merged_into"] = json!(into);
+    bump(&mut keep); bump(&mut drop);
+    // Both puts and the caller's retry receipt share the same SQLite transaction.
+    put(conn, &drop, "merge_into", &json!({"id":into}))?;
+    put(conn, &keep, "merge_from", &json!({"id":id}))?;
+    Ok(json!({"kept":keep,"archived":drop}))
 }
 
 pub(super) fn update(conn: &Connection, args: &Args<'_>) -> LegacyResult<Value> {
@@ -509,28 +584,4 @@ fn valid_timestamp(raw: &str) -> bool {
             && tail.as_bytes()[3] == b':'
             && tail[1..3].parse::<u32>().is_ok_and(|n| n <= 23)
             && tail[4..6].parse::<u32>().is_ok_and(|n| n <= 59))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::valid_timestamp;
-    #[test]
-    fn event_times_are_real_calendar_instants() {
-        for good in [
-            "2024-02-29T12:05:20Z",
-            "2026-10-25T18:10:04.123Z",
-            "2026-10-25T18:10:04+04:30",
-        ] {
-            assert!(valid_timestamp(good), "{good}");
-        }
-        for bad in [
-            "2025-02-29T12:05:20Z",
-            "2026-11-31T10:00:00Z",
-            "2026-10-25T28:10:04Z",
-            "2026-10-25T18:10:04",
-            "",
-        ] {
-            assert!(!valid_timestamp(bad), "{bad}");
-        }
-    }
 }

@@ -140,7 +140,7 @@ window.DMItches=(()=>{
     $('#itch-research').onclick=()=>DMResearch.open(selected);
     try{const saved=JSON.parse(DMT3.read(localStorage,'dm-itch-sends')||'{}');for(const [id,value]of Object.entries(saved).slice(0,20))if(value?.args?.id===id&&typeof value.args.thread_id==='string'&&typeof value.args.message==='string'&&typeof value.args.request_key==='string')pending[id]=value;}catch{}
     $('#itch-close').onclick=()=>{$('#itch-view').close();rememberPage();};$('#itch-view').addEventListener('cancel',e=>{e.preventDefault();$('#itch-view').close();rememberPage();});$('#itch-view').addEventListener('close',()=>{if($('#itch-view').open)return;generation++;clearTimeout(targetTimer);clearTarget();targetQueue=targetQueue.catch(()=>{}).then(()=>post('/api/cook',{action:'unfocus',owner}));targetQueue.catch(()=>{});DMUI.close();clearMedia();rememberPage();});
-    $('#itch-snip').onclick=async()=>{const button=$('#itch-snip');button.disabled=true;try{await post('/api/native',{action:'snip',itch_id:selected});toast('Drag a box on your PC. Esc cancels.');}catch(e){toast(e.message);}finally{button.disabled=false;}};
+    $('#itch-snip').onclick=async()=>{const button=$('#itch-snip');button.disabled=true;try{await window.DMNativeDesktop.snip(selected);}finally{button.disabled=false;}};
     $('#itch-send-now').onclick=()=>send('next');$('#itch-send-all').onclick=()=>send('all');
     $('#itch-next').onclick=e=>{if(e.target.closest('[data-review-learn]'))return DMLearning.open(selected);if(e.target.closest('[data-review-refactor]'))return refactor();if(e.target.closest('[data-review-accept]'))action('accept').catch(e=>toast(e.message));};
     $('#itch-followup').oninput=e=>{draft().followup=e.target.value;paint();edited();};
@@ -155,5 +155,5 @@ window.DMItches=(()=>{
     window.addEventListener('focus',()=>{if($('#itch-view').open)publish(true);});
     window.addEventListener('pagehide',()=>{for(const action of ['clear','unfocus'])fetch('/api/cook',{method:'POST',headers:{'Content-Type':'application/json','X-DumbManager':'1'},body:JSON.stringify({action,owner}),keepalive:true}).catch(()=>{});});
   }
-  return {init,open,cook:id=>open(id,true),decorate:paint};
+  return {init,open,cook:id=>open(id,true),decorate:paint,refreshMedia:()=>showMedia(Math.max(0,(row()?.attachments?.length||1)-1))};
 })();

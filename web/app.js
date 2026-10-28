@@ -656,7 +656,7 @@ function renderShortcuts(){
 async function nativeControl(action='status'){
   if(action==='status'&&(view!=='setup'||settingsTab!=='shortcuts'))return;
   if(nativeBusy)return;nativeBusy=true;renderShortcuts();
-  try{nativeState=await post('/api/native',{action});renderShortcuts();}
+  try{nativeState=await post('/api/native',{action});if(action==='snip')await window.DMNativeDesktop?.accept(nativeState);renderShortcuts();}
   catch(e){nativeState={running:false,note:e.message};toast(e.message);}
   finally{nativeBusy=false;renderShortcuts();clearTimeout(nativeTimer);if(view==='setup'&&settingsTab==='shortcuts')nativeTimer=setTimeout(()=>nativeControl(),nativeState.test_remaining?1000:5000);}
 }

@@ -105,4 +105,4 @@ separate installed-package checks below used the real Windows shell.
 
 Small icons are full-bleed (no transparent margin at 16-48 px). The inspected
 shell views did not clip them. Sizes 64-512 keep a 1-12 px margin. Review hashes
-and native-check details are refreshed in the ignored preview report.
+were recorded in the external development verification archive.

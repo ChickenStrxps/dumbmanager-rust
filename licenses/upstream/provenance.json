@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "scope": "Supplemental license and notice texts for the packages listed in .qa/missing-license-metadata.json.",
-  "selectionPolicy": "MIT is selected wherever available, except cesu8, for which Apache-2.0 is selected. BSD-3-Clause and MPL-2.0 apply as declared. Upstream licensing notes and attribution are retained; no copyright holder is inferred or invented.",
+  "scope": "Supplemental license and attribution texts for exact packages in tools/license-overrides.json.",
+  "selectionPolicy": "Select an offered MIT alternative when full upstream text is available. Apache-2.0 is selected for cesu8, fxhash and mac. Retain required source notices, BSD and MPL texts.",
   "offlineUse": "tools/license-overrides.json is a plain object mapping exact crate@version keys to arrays of repository-relative paths. Consumers read the collected local files; ordinary builds require no upstream HTTP access.",
   "unresolvedLicenseTexts": [],
   "provenanceLimitations": [
@@ -589,6 +589,65 @@
         "licenses/upstream/winapi-rs/NOTICE.txt"
       ],
       "releaseCandidatePathInVcs": "x86_64"
+    },
+    "fxhash@0.2.1": {
+      "declaredLicense": "Apache-2.0/MIT",
+      "selectedLicense": "Apache-2.0",
+      "repository": "https://github.com/cbreeden/fxhash",
+      "packagedCommit": null,
+      "pathInVcs": null,
+      "files": [
+        "licenses/upstream/cesu8/LICENSE-APACHE-2.0.txt",
+        "licenses/upstream/fxhash/NOTICE.txt"
+      ],
+      "note": "Package declares Apache-2.0/MIT but omits full license texts. Apache-2.0 is selected; canonical Apache text and packaged attribution are retained. Exact upstream packaged commit is unavailable.",
+      "evidence": [
+        "Published Cargo.toml and packaged source notices"
+      ]
+    },
+    "mac@0.1.1": {
+      "declaredLicense": "MIT/Apache-2.0",
+      "selectedLicense": "Apache-2.0",
+      "repository": "https://github.com/reem/rust-mac.git",
+      "packagedCommit": null,
+      "pathInVcs": null,
+      "files": [
+        "licenses/upstream/cesu8/LICENSE-APACHE-2.0.txt",
+        "licenses/upstream/mac/NOTICE.txt"
+      ],
+      "note": "Package declares Apache-2.0/MIT but omits full license texts. Apache-2.0 is selected; canonical Apache text and packaged attribution are retained. Exact upstream packaged commit is unavailable.",
+      "evidence": [
+        "Published Cargo.toml and packaged source notices"
+      ]
+    },
+    "match_token@0.35.0": {
+      "declaredLicense": "MIT OR Apache-2.0",
+      "selectedLicense": "MIT",
+      "repository": "https://github.com/servo/html5ever",
+      "packagedCommit": "6db7bbf1c4dfaecd28731950d427e40c8b911bef",
+      "pathInVcs": "match_token",
+      "files": [
+        "licenses/upstream/html5ever/LICENSE-MIT"
+      ],
+      "note": "MIT text from the exact packaged repository commit.",
+      "evidence": [
+        "Published Cargo.toml and packaged source notices"
+      ]
+    },
+    "selectors@0.31.0": {
+      "declaredLicense": "MPL-2.0",
+      "selectedLicense": "MPL-2.0",
+      "repository": "https://github.com/servo/stylo",
+      "packagedCommit": "7f8df16fddb15b6ac9097f8ab25caffff1a7095e",
+      "pathInVcs": "selectors",
+      "files": [
+        "licenses/upstream/selectors/MPL-2.0.txt",
+        "licenses/upstream/selectors/0.31.0-NOTICE.txt"
+      ],
+      "note": "Official Mozilla full license text and exact packaged source license notice.",
+      "evidence": [
+        "Published Cargo.toml and packaged source notices"
+      ]
     }
   },
   "files": {
@@ -798,6 +857,38 @@
       "note": "AUTHORS contains the full MIT grant and disclaimer plus the upstream copyright and author list. MIT is the selected alternative; the file is retained verbatim.",
       "sha256": "d027e91dbc9cdbb2f1190068e498bd6b61cff022b6a032b191021ba658d96111",
       "bytes": 3733
+    },
+    "licenses/upstream/fxhash/NOTICE.txt": {
+      "kind": "notice",
+      "sourceUrls": [
+        "https://github.com/cbreeden/fxhash"
+      ],
+      "sha256": "5d392ff1ac69a18c9beb41720ecbfd56f7792a1ec4321428e73757d4283f5a61",
+      "bytes": 466
+    },
+    "licenses/upstream/mac/NOTICE.txt": {
+      "kind": "notice",
+      "sourceUrls": [
+        "https://github.com/reem/rust-mac.git"
+      ],
+      "sha256": "f8e8d828b53d1945a01dcfea8b73a261e8b2c6de0752bfc9e3378e2c26ef74dc",
+      "bytes": 144
+    },
+    "licenses/upstream/html5ever/LICENSE-MIT": {
+      "kind": "license",
+      "sourceUrls": [
+        "https://raw.githubusercontent.com/servo/html5ever/6db7bbf1c4dfaecd28731950d427e40c8b911bef/LICENSE-MIT"
+      ],
+      "sha256": "86dd7f026f916daf7511e39951ad8ea8cf55a8db67ae64060dacf829761c18f3",
+      "bytes": 1076
+    },
+    "licenses/upstream/selectors/0.31.0-NOTICE.txt": {
+      "kind": "notice",
+      "sourceUrls": [
+        "https://github.com/servo/stylo/tree/7f8df16fddb15b6ac9097f8ab25caffff1a7095e/selectors"
+      ],
+      "sha256": "766674381e88a468d55e07de3596987391cf0e8beebe51baf4fddf11078785b3",
+      "bytes": 206
     }
   }
 }

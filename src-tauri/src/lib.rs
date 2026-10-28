@@ -10,10 +10,9 @@
 
 pub mod card;
 mod commands;
-pub mod native_check;
-#[cfg(all(feature = "desktop-qa", debug_assertions))]
-pub mod native_ui_qa;
 mod platform;
+mod preview;
+pub mod services;
 mod state;
 mod tray;
 pub mod window;
@@ -31,13 +30,35 @@ pub const APP_ID: &str = "io.dumbmanager.rust";
 pub const APP_NAME: &str = "DumbManager Rust";
 pub const MAIN_WINDOW: &str = "main";
 
-#[cfg(all(feature = "desktop-qa", not(debug_assertions)))]
-compile_error!("desktop-qa is development-only; omit this feature from release builds");
+/// Explicit console bridge. It shares this installation's SQLite and DPAPI
+/// configuration, never a caller-supplied directory or a legacy app profile.
+pub fn run_mcp() -> Result<(), Box<dyn Error>> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.len() != 2 || args[0] != "--profile" || !matches!(args[1].as_str(), "mcp" | "dots") {
+        return Err("Usage: dumbmanager-mcp --profile mcp|dots".into());
+    }
+    // This is the same dirs::data_dir()/identifier rule used by Tauri's
+    // PathResolver::app_data_dir. No appDirectoriesOverride is configured.
+    let root = dirs::data_dir()
+        .ok_or("Windows application data is unavailable.")?
+        .join(APP_ID);
+    let paths = AppPaths::new(root)?;
+    let store = Store::open(&paths.database_path())?;
+    let state = AppState::new(paths, store, None);
+    services::voice::serve_stdio(
+        &state,
+        &args[1],
+        std::io::stdin().lock(),
+        std::io::stdout().lock(),
+    )?;
+    state.store().checkpoint()?;
+    Ok(())
+}
 
 pub fn run() {
     if std::env::args_os().nth(1).is_some() {
         fail(
-            "The desktop executable does not accept command-line arguments or data-directory overrides. For isolated native QA, run the native-check Cargo example with a new temporary root.",
+            "The desktop executable does not accept command-line arguments or data-directory overrides.",
         );
     }
     // Before any window exists, so the taskbar uses this app's own identity.
@@ -50,8 +71,7 @@ fn app_context() -> tauri::Context<tauri::Wry> {
     tauri::generate_context!()
 }
 
-/// Both executables use this exact command handler, plugins and event loop.
-/// The production entry point always supplies `start`, with its AppId guard.
+/// The desktop command handler, plugins and event loop.
 fn run_desktop<F>(context: tauri::Context<tauri::Wry>, name: &'static str, start: F)
 where
     F: FnOnce(&AppHandle) -> Result<(), Box<dyn Error>> + Send + 'static,
@@ -65,6 +85,30 @@ where
     }));
 
     let app = builder
+        .register_uri_scheme_protocol("dm-preview", |context, request| {
+            let html = (request.method() == tauri::http::Method::GET
+                && context.webview_label() == MAIN_WINDOW)
+                .then(|| {
+                    context
+                        .app_handle()
+                        .try_state::<AppState>()
+                        .and_then(|state| state.previews.get(request.uri().path()))
+                })
+                .flatten();
+            tauri::http::Response::builder()
+                .status(if html.is_some() { 200 } else { 404 })
+                .header("Content-Type", "text/html; charset=utf-8")
+                .header("Content-Security-Policy", preview::CSP)
+                .header("Cache-Control", "no-store")
+                .header("X-Content-Type-Options", "nosniff")
+                .body(
+                    html.unwrap_or_else(|| {
+                        "<p>This preview expired. Reopen it from the thread.</p>".into()
+                    })
+                    .into_bytes(),
+                )
+                .expect("static preview response headers")
+        })
         .invoke_handler(tauri::generate_handler![
             commands::app_snapshot,
             commands::itch_list,
@@ -74,6 +118,7 @@ where
             commands::settings_save,
             commands::card_export,
             commands::open_export_folder,
+            commands::choose_path,
             commands::legacy_api,
         ])
         .setup(move |app| {
@@ -88,6 +133,7 @@ where
     match app {
         Ok(app) => app.run(|app, event| {
             if let RunEvent::Exit = event {
+                services::companion::shutdown();
                 // Leave a self-contained database file behind on a clean exit.
                 if let Some(state) = app.try_state::<AppState>() {
                     let _ = state.store().checkpoint();
@@ -113,8 +159,8 @@ fn start(app: &AppHandle) -> Result<(), Box<dyn Error>> {
     start_at(app, &data_dir, webview_dir, APP_NAME)
 }
 
-/// Private wiring shared with the opt-in QA example. No caller-supplied path
-/// reaches this function from the normal executable, its CLI, or its IPC.
+/// Private startup wiring. No caller-supplied data path reaches this function
+/// from the executable, its CLI, or its IPC.
 fn start_at(
     app: &AppHandle,
     data_dir: &Path,
@@ -130,7 +176,15 @@ fn start_at(
 
     app.manage(AppState::new(paths, store, card::renderer()));
     window::create_named(app, webview_dir, name)?;
+    #[cfg(windows)]
+    if let Some(window) = app.get_webview_window(MAIN_WINDOW) {
+        if let Ok(hwnd) = window.hwnd() {
+            platform::set_clipboard_owner(hwnd.0 as isize);
+        }
+    }
     tray::create_named(app, name)?;
+    services::desktop::install(app);
+    services::companion::initialize(app.clone());
     Ok(())
 }
 

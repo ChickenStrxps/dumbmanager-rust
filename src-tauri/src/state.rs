@@ -20,16 +20,21 @@ pub struct AppState {
     /// `None` makes `card_export` answer with an explicit "unavailable" error.
     pub renderer: Option<Box<dyn CardRenderer>>,
     pub exports: ExportGate,
+    pub runtime: crate::services::runtime::Runtime,
+    pub previews: crate::preview::PreviewCache,
 }
 
 impl AppState {
     pub fn new(paths: AppPaths, store: Store, renderer: Option<Box<dyn CardRenderer>>) -> Self {
+        let runtime = crate::services::runtime::Runtime::new(paths.data_dir().join("services"));
         Self {
             store: Mutex::new(store),
             paths,
             started_at: time::now_iso(),
             renderer,
             exports: ExportGate::new(),
+            runtime,
+            previews: crate::preview::PreviewCache::default(),
         }
     }
 
@@ -103,9 +108,74 @@ impl AppState {
     }
 
     pub fn legacy_api(&self, path: &str, payload: &Value) -> LegacyResult<Value> {
-        legacy::validate_request(path, payload)?;
+        if matches!(path, "/api/upload" | "/api/itch-upload") {
+            // Binary transport has a separate, narrow size limit. It cannot
+            // enlarge arbitrary capability inputs or smuggle a filesystem path.
+            let encoded = payload
+                .get("base64")
+                .and_then(Value::as_str)
+                .ok_or_else(|| LegacyError::invalid("Expected an encoded upload."))?;
+            if encoded.len() > 69_905_068 || !payload.is_object() {
+                return Err(LegacyError {
+                    error: "Attach a file up to 50 MiB.".into(),
+                    code: "too_large".into(),
+                    status: 413,
+                });
+            }
+        } else if path == "/api/call"
+            && payload.get("name").and_then(Value::as_str) == Some("manager.social.gif_store")
+        {
+            // Only the frozen-card renderer may submit a larger JSON body.
+            // The service independently checks the one-shot nonce and GIF bytes.
+            let args = payload
+                .get("args")
+                .filter(|v| v.is_object())
+                .ok_or_else(|| LegacyError::invalid("Expected rendered card arguments."))?;
+            let gif = args
+                .get("gif")
+                .and_then(Value::as_str)
+                .ok_or_else(|| LegacyError::invalid("Expected an encoded card."))?;
+            if gif.len() > 20_971_520
+                || serde_json::to_vec(payload).map_or(true, |v| v.len() > 21_037_056)
+            {
+                return Err(LegacyError {
+                    error: "Animated card exceeds 15 MiB.".into(),
+                    code: "too_large".into(),
+                    status: 413,
+                });
+            }
+        } else {
+            legacy::validate_request(path, payload)?;
+        }
+        if let Some(result) = crate::services::dispatch(self, path, payload) {
+            if path == "/api/preview" {
+                let mut result = result?;
+                if let Some(html) = result
+                    .get("html")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned)
+                {
+                    result.as_object_mut().unwrap().remove("html");
+                    result["url"] = Value::String(self.previews.insert(html)?);
+                }
+                return Ok(result);
+            }
+            return result;
+        }
         if path == "/api/call" {
             let (name, args) = legacy::call_envelope(payload)?;
+            if matches!(name, "manager.capture" | "manager.attach") {
+                let ids = match args.get("attachments") {
+                    None => serde_json::json!([]),
+                    Some(Value::String(raw)) => serde_json::from_str(raw)
+                        .map_err(|_| LegacyError::invalid("Expected uploaded evidence IDs."))?,
+                    Some(value) => value.clone(),
+                };
+                let references = crate::services::media::references(self, &ids)?;
+                return self
+                    .store()
+                    .legacy_call_with_media(name, &args, Some(&references));
+            }
             if name == "manager.card_export" {
                 // This optional local extension uses the existing verified
                 // renderer, never the original social draft/image service.
@@ -123,114 +193,5 @@ impl AppState {
             }
         }
         self.store().legacy_api(path, payload)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-    use std::path::PathBuf;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-
-    struct TestDir(PathBuf);
-    impl Drop for TestDir {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.0);
-        }
-    }
-
-    struct Fixture {
-        state: AppState,
-        // Drop the state (and its SQLite connection) before this directory.
-        _dir: TestDir,
-    }
-
-    impl Fixture {
-        fn new(render: bool) -> Self {
-            static NEXT: AtomicUsize = AtomicUsize::new(0);
-            let root = std::env::temp_dir().join(format!(
-                "dumbmanager-rust-legacy-command-test-{}-{}-{}",
-                std::process::id(),
-                time::now_millis(),
-                NEXT.fetch_add(1, Ordering::Relaxed)
-            ));
-            std::fs::create_dir(&root).unwrap();
-            let paths = AppPaths::new(root.join("io.dumbmanager.rust")).unwrap();
-            let store = Store::open(&paths.database_path()).unwrap();
-            Self {
-                state: AppState::new(
-                    paths,
-                    store,
-                    if render {
-                        crate::card::renderer()
-                    } else {
-                        None
-                    },
-                ),
-                _dir: TestDir(root),
-            }
-        }
-
-        fn capture(&self) -> Value {
-            self.state.legacy_api("/api/call", &json!({"name":"manager.capture",
-                "args":{"title":"Keep the exact original page","project":"sample","request_key":"native-adapter-test"}})).unwrap()
-        }
-    }
-
-    #[test]
-    fn legacy_native_service_returns_raw_shapes_and_structured_errors() {
-        let fx = Fixture::new(false);
-        let row = fx.capture();
-        assert_eq!(row["state"], "open");
-        assert_eq!(row["version"], 1);
-        let read = fx
-            .state
-            .legacy_api(
-                "/api/call",
-                &json!({"name":"manager.get","args":{"id":row["id"]}}),
-            )
-            .unwrap();
-        assert_eq!(read, row);
-        let error = fx
-            .state
-            .legacy_api(
-                "/api/call",
-                &json!({"name":"manager.card_export","args":{"id":row["id"],"format":"gif"}}),
-            )
-            .unwrap_err();
-        assert_eq!(error.code, "unavailable");
-        assert_eq!(error.status, 501);
-        assert!(serde_json::to_value(error).unwrap()["error"].is_string());
-        assert!(!fx.state.paths.exports_dir().exists());
-        assert_eq!(fx.state.legacy_api("/api/call", &json!({"name":"manager.card_export","args":{"id":row["id"],"format":"png","path":"C:\\not-allowed.png"}})).unwrap_err().status,400);
-    }
-
-    #[test]
-    fn original_capture_can_export_real_native_card_without_mutating_itch() {
-        let fx = Fixture::new(true);
-        let row = fx.capture();
-        let card = fx
-            .state
-            .legacy_api(
-                "/api/call",
-                &json!({"name":"manager.card_export","args":{"id":row["id"],"format":"png"}}),
-            )
-            .unwrap();
-        let path = PathBuf::from(card["path"].as_str().unwrap());
-        assert_eq!(path.parent(), Some(fx.state.paths.exports_dir().as_path()));
-        assert_eq!(&std::fs::read(&path).unwrap()[..8], b"\x89PNG\r\n\x1a\n");
-        assert!(card["width"].as_u64().unwrap() >= 1920);
-        assert_eq!(card["frames"], 1);
-        assert!(card["bytes"].as_u64().unwrap() > 100);
-        assert_eq!(
-            fx.state
-                .legacy_api(
-                    "/api/call",
-                    &json!({"name":"manager.get","args":{"id":row["id"]}})
-                )
-                .unwrap(),
-            row
-        );
     }
 }

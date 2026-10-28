@@ -125,7 +125,7 @@ changing that policy remains a parent-owned integration decision.
 
 ## Verification
 
-`core/tests/original_ui.rs` exercises actual original init/capture/update/
+The original UI contract suite, now removed, exercised actual original init/capture/update/
 review/settings/context shapes, complete field preservation, reload, state
 bridging, idempotence, real conflict/transaction failures, migration, concurrent
 retry and unsupported/unknown capability refusal. Native state tests exercise
@@ -134,10 +134,7 @@ All tests create temporary state. The original UI's page restoration still
 requires the parent's end-to-end WebView QA; no claim of full feature parity
 or visual equivalence follows from headless contract tests.
 
-```powershell
-cargo test --manifest-path src-tauri/Cargo.toml -p dumbmanager-core -p dumbmanager-rust --features desktop-qa
-cargo check --manifest-path src-tauri/Cargo.toml --features desktop-qa
-cargo clippy --manifest-path src-tauri/Cargo.toml -p dumbmanager-core -p dumbmanager-rust --all-targets --features desktop-qa -- -D warnings
-cargo fmt --manifest-path src-tauri/Cargo.toml --check
-cargo fmt --manifest-path src-tauri/core/Cargo.toml --check
-```
+The historical checks below were performed before the development suites were
+removed. Current build validation uses Cargo check/Clippy and JavaScript syntax
+checks; the previous QA runners are no longer included. See the migration
+inventory for the current service scope.

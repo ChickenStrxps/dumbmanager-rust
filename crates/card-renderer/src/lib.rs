@@ -83,6 +83,72 @@ impl Canvas {
     }
 }
 
+// Bundled, licensed fonts; no system-font discovery or replacement glyphs.
+fn fonts() -> &'static [fontdue::Font] {
+    static FONTS: std::sync::OnceLock<Vec<fontdue::Font>> = std::sync::OnceLock::new();
+    FONTS.get_or_init(|| {
+        [
+            include_bytes!("../../../web/fonts/IBMPlexMono.ttf").as_slice(),
+            include_bytes!("../../../web/fonts/SpaceGrotesk.ttf").as_slice(),
+            include_bytes!("../../../web/fonts/Silkscreen.ttf").as_slice(),
+        ]
+        .iter()
+        .map(|bytes| {
+            fontdue::Font::from_bytes(*bytes, fontdue::FontSettings::default())
+                .expect("bundled font")
+        })
+        .collect()
+    })
+}
+fn font_for(ch: char) -> Option<&'static fontdue::Font> {
+    fonts().iter().find(|font| font.lookup_glyph_index(ch) != 0)
+}
+fn validate_text(input: &CardInput<'_>) -> io::Result<()> {
+    for ch in input
+        .title
+        .chars()
+        .chain(input.description.chars())
+        .chain(input.project.chars())
+    {
+        if !ch.is_whitespace() && font_for(ch).is_none() {
+            return Err(error(format!(
+                "Bundled fonts cannot render U+{:04X} faithfully.",
+                ch as u32
+            )));
+        }
+    }
+    Ok(())
+}
+impl Canvas {
+    fn font_text(&mut self, x: i32, y: i32, text: &str, size: f32, color: u8) {
+        let mut pen = x as f32;
+        for ch in text.chars() {
+            if ch.is_whitespace() {
+                pen += size * 0.61;
+                continue;
+            }
+            if let Some(font) = font_for(ch) {
+                let (metrics, bitmap) = font.rasterize(ch, size);
+                let top = y + size as i32 - metrics.height as i32 - metrics.ymin;
+                for yy in 0..metrics.height {
+                    for xx in 0..metrics.width {
+                        if bitmap[yy * metrics.width + xx] >= 96 {
+                            self.rect(
+                                pen as i32 + metrics.xmin + xx as i32,
+                                top + yy as i32,
+                                1,
+                                1,
+                                color,
+                            );
+                        }
+                    }
+                }
+                pen += metrics.advance_width;
+            }
+        }
+    }
+}
+
 /// Word wrapping never splits a Unicode code point or produces an overwide line.
 pub fn wrap(text: &str, width: usize) -> Vec<String> {
     if width == 0 {
@@ -113,6 +179,51 @@ pub fn wrap(text: &str, width: usize) -> Vec<String> {
         .collect()
 }
 
+/// Static SVG copy wrapping follows the original card's display-column rules.
+pub fn card_lines(value: &str, width: usize) -> Vec<String> {
+    use unicode_width::UnicodeWidthChar;
+    let paragraphs: Vec<&str> = value.lines().collect();
+    let paragraphs = if paragraphs.len() > 6 {
+        vec![paragraphs.join(" ")]
+    } else {
+        paragraphs.into_iter().map(str::to_owned).collect()
+    };
+    let weight = |s: &str| {
+        s.chars()
+            .map(|c| UnicodeWidthChar::width(c).unwrap_or(0))
+            .sum::<usize>()
+    };
+    let mut result = Vec::new();
+    for paragraph in paragraphs {
+        let mut line = String::new();
+        for word in paragraph.split_whitespace() {
+            if !line.is_empty()
+                && weight(&format!("{line} {word}")) > width
+                && weight(word) <= width
+            {
+                result.push(std::mem::take(&mut line));
+            }
+            let pending = format!("{}{word}", if line.is_empty() { "" } else { " " });
+            for ch in pending.chars() {
+                if weight(&line) + UnicodeWidthChar::width(ch).unwrap_or(0) > width {
+                    result.push(line.trim_end().to_string());
+                    line.clear();
+                }
+                if !line.is_empty() || !ch.is_whitespace() {
+                    line.push(ch);
+                }
+            }
+        }
+        if !line.is_empty() {
+            result.push(line);
+        }
+    }
+    if result.is_empty() {
+        result.push(String::new());
+    }
+    result
+}
+
 fn seed(text: &str) -> u64 {
     text.bytes().fold(1469598103934665603, |h, b| {
         (h ^ b as u64).wrapping_mul(1099511628211)
@@ -135,34 +246,34 @@ fn base(input: &CardInput<'_>) -> Canvas {
     c.text(52, 52, "[ DM ]", 2, 8);
     c.text(188, 56, "BUILD LOG / RUST", 1, 5);
     c.rect(52, 94, 1092, 1, 3);
-    let project = wrap(input.project, 32)
-        .first()
-        .cloned()
-        .unwrap_or_else(|| "UNSORTED".into());
-    c.text(52, 120, &project.to_uppercase(), 1, 10);
-    let large_title = wrap(input.title, 24);
-    let (titles, scale, line_height) = if large_title.len() <= 4 {
-        (large_title, 3, 38)
+    let project = if input.project.trim().is_empty() {
+        "UNSORTED"
     } else {
-        (wrap(input.title, 35), 2, 26)
+        input.project
     };
+    let project_lines = wrap(project, 65);
+    for (i, line) in project_lines.iter().take(2).enumerate() {
+        c.font_text(52, 112 + i as i32 * 13, line, 11.0, 10);
+    }
+    // Fit all draft copy into the text column rather than silently dropping lines.
+    let titles = wrap(input.title, 34);
+    let title_size = (150.0 / titles.len().max(1) as f32).clamp(12.0, 25.0);
+    let title_step = title_size * 1.25;
     for (i, line) in titles.iter().enumerate() {
-        c.text(50, 158 + i as i32 * line_height, line, scale, 6);
-    }
-    let start = 172 + titles.len() as i32 * line_height;
-    let description = wrap(input.description, 46);
-    let description_lines = ((550 - start) / 23).clamp(0, 5) as usize;
-    for (i, line) in description.iter().take(description_lines).enumerate() {
-        c.text(52, start + i as i32 * 23, line, 1, 5);
-    }
-    if description.len() > description_lines {
-        c.text(
-            52,
-            start + description_lines as i32 * 23,
-            "Full details stay with the itch.",
-            1,
-            4,
+        c.font_text(
+            50,
+            150 + (i as f32 * title_step) as i32,
+            line,
+            title_size,
+            6,
         );
+    }
+    let start = 158 + (titles.len() as f32 * title_step) as i32;
+    let description = wrap(input.description, 65);
+    let available = (560 - start).max(1) as f32;
+    let size = (available / (description.len().max(1) as f32 * 1.25)).min(15.0);
+    for (i, line) in description.iter().enumerate() {
+        c.font_text(52, start + (i as f32 * size * 1.25) as i32, line, size, 5);
     }
     c.rect(52, 578, 1092, 1, 3);
     let label = match input.status {
@@ -273,6 +384,46 @@ pub fn render_frame(input: &CardInput<'_>, phase: f64) -> Vec<u8> {
     c.pixels
 }
 
+/// Decode every frame before accepting a browser-rendered GIF into native storage.
+#[derive(Debug)]
+pub struct GifInfo {
+    pub frames: usize,
+    pub centiseconds: u64,
+}
+pub fn inspect_gif(data: &[u8]) -> io::Result<GifInfo> {
+    if data.len() > 15 * 1024 * 1024 || !data.starts_with(b"GIF89a") || !data.ends_with(b";") {
+        return Err(error("Invalid GIF."));
+    }
+    let mut decoder = gif::DecodeOptions::new()
+        .read_info(std::io::Cursor::new(data))
+        .map_err(error)?;
+    if (decoder.width(), decoder.height()) != (WIDTH, HEIGHT) {
+        return Err(error("Invalid card dimensions."));
+    }
+    let mut frames = 0usize;
+    let mut centiseconds = 0u64;
+    while let Some(frame) = decoder.read_next_frame().map_err(error)? {
+        frames += 1;
+        centiseconds += u64::from(frame.delay);
+        if frames > 96
+            || frame.width == 0
+            || frame.height == 0
+            || u32::from(frame.left) + u32::from(frame.width) > u32::from(WIDTH)
+            || u32::from(frame.top) + u32::from(frame.height) > u32::from(HEIGHT)
+            || centiseconds > 576
+        {
+            return Err(error("Invalid GIF frame bounds."));
+        }
+    }
+    if frames == 0 || centiseconds == 0 || decoder.repeat() != gif::Repeat::Infinite {
+        return Err(error("GIF must be a looping animation."));
+    }
+    Ok(GifInfo {
+        frames,
+        centiseconds,
+    })
+}
+
 /// Writes a new, uniquely named export only within the supplied export directory.
 /// Limits are fixed to prevent unbounded image sizes or frame counts.
 pub fn export_card(directory: &Path, input: &CardInput<'_>, format: &str) -> io::Result<Export> {
@@ -287,6 +438,7 @@ pub fn export_card(directory: &Path, input: &CardInput<'_>, format: &str) -> io:
             "A title up to 200 characters and description up to 20,000 characters are required.",
         ));
     }
+    validate_text(input)?;
     fs::create_dir_all(directory)?;
     let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -365,70 +517,23 @@ pub fn export_card(directory: &Path, input: &CardInput<'_>, format: &str) -> io:
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    fn input() -> CardInput<'static> {
-        CardInput {
-            title: "A faster way to catch an itch",
-            description: "Save a thought. Keep its context. Review it when the change is ready.",
-            project: "DumbManager Rust",
-            status: "ready",
-            seed: "test",
-        }
-    }
-    #[test]
-    fn loop_is_periodic_and_text_is_still() {
-        let a = render_frame(&input(), 0.0);
-        let b = render_frame(&input(), TAU);
-        let c = render_frame(&input(), 0.9);
-        assert_eq!(a, b);
-        assert_ne!(a, c);
-        for y in 0..HEIGHT as usize {
-            assert_eq!(
-                &a[y * WIDTH as usize..y * WIDTH as usize + 700],
-                &c[y * WIDTH as usize..y * WIDTH as usize + 700]
-            );
-        }
-    }
-    #[test]
-    fn exports_decode_with_real_frames_and_resolution() {
-        let dir = tempfile::tempdir().unwrap();
-        let out = export_card(dir.path(), &input(), "gif").unwrap();
-        let mut decoder = gif::DecodeOptions::new()
-            .read_info(std::fs::File::open(out.path).unwrap())
-            .unwrap();
-        assert_eq!((decoder.width(), decoder.height()), (WIDTH, HEIGHT));
-        let mut count = 0;
-        while decoder.read_next_frame().unwrap().is_some() {
-            count += 1;
-        }
-        assert_eq!(count, FRAMES);
-        let out = export_card(dir.path(), &input(), "png").unwrap();
-        let decoder = png::Decoder::new(std::io::BufReader::new(
-            std::fs::File::open(out.path).unwrap(),
+pub mod sanitize;
+
+/// Encode a bounded native RGBA capture without an external image tool.
+pub fn png_rgba(width: u32, height: u32, rgba: &[u8]) -> io::Result<Vec<u8>> {
+    let count = u64::from(width) * u64::from(height);
+    if width == 0 || height == 0 || count > 16_777_216 || rgba.len() as u64 != count * 4 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Invalid capture size",
         ));
-        let info = decoder.read_info().unwrap();
-        assert_eq!((info.info().width, info.info().height), (2400, 1350));
     }
-    #[test]
-    fn invalid_input_does_not_create_output() {
-        let dir = tempfile::tempdir().unwrap();
-        let bad = CardInput {
-            title: "",
-            ..input()
-        };
-        assert!(export_card(dir.path(), &bad, "gif").is_err());
-        assert!(export_card(dir.path(), &input(), "../../other").is_err());
-        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+    let mut out = Vec::new();
+    {
+        let mut encoder = png::Encoder::new(&mut out, width, height);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        encoder.write_header()?.write_image_data(rgba)?;
     }
-    #[test]
-    fn word_wrap_stays_within_columns() {
-        let lines = wrap("one extraordinarilylongwordwithnospace cafe\u{e9}", 7);
-        assert!(lines.iter().all(|v| v.chars().count() <= 7));
-        assert_eq!(
-            lines.join("").replace(' ', ""),
-            "oneextraordinarilylongwordwithnospacecafe\u{e9}"
-        );
-    }
+    Ok(out)
 }

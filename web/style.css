@@ -634,3 +634,6 @@ body.no-motion .itch-entry:hover{transform:none}
 .bridge-code{overflow:auto;max-width:100%;font-size:12px;padding:12px;border:1px solid #72708055}
 .bridge-command-preview{margin-top:20px;padding:16px;border:1px solid #ec5ac077}
 @media(max-width:480px){.bridge-settings .detail-actions>*{flex:1 1 120px}.bridge-settings ol{padding-left:22px}}
+
+/* Native connection fields follow the existing settings palette. */
+.native-settings-card>label{display:block;margin:16px 0 6px;font-size:12px}.native-settings-card>input{display:block;width:100%;max-width:620px;background:var(--bg);color:var(--text);border:1px solid var(--border);padding:10px;font:12px Plex,monospace;margin-bottom:12px}.native-settings-card>input:focus{outline:2px solid var(--amber);outline-offset:2px}

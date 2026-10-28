@@ -1,0 +1,32 @@
+'use strict';
+// Native additions to the original settings and Inspiration surfaces.
+(()=>{
+  async function mercurySettings(){
+    const status=await call('manager.typing_status');
+    dialog('Fresh ideas',`<p>When you tap Suggest, Mercury 2 receives your typed words and the selected saved project context (task, testing and entities) when it matches the selected project and thread. Typing alone stays local. Suggestions are proposals; the app takes no action on them. Saving a key does not test it; use Test before requesting suggestions.</p><label for="native-mercury-key">Inception API key</label><input id="native-mercury-key" type="password" autocomplete="off" placeholder="${status.key_saved?'Saved — blank keeps it':'Inception key'}"><p id="native-mercury-result" role="status"></p><button type="button" id="native-mercury-test" class="secondary" ${status.configured?'':'disabled'}>Test saved key</button>${status.key_saved?' <button type="button" id="native-mercury-off" class="quiet">Turn off</button> <button type="button" id="native-mercury-forget" class="quiet">Forget key</button>':''}`,'Save key',async()=>{await call('manager.typing_configure',{api_key:$('#native-mercury-key').value,enabled:true});$('#native-mercury-key').value='';await refresh();toast('Mercury configured. Test it to verify the connection.');});
+    $('#native-mercury-test').onclick=async()=>{const b=$('#native-mercury-test');b.disabled=true;try{await call('manager.ai.test',{provider:'mercury'});$('#native-mercury-result').textContent='Provider responded successfully.';}catch(e){$('#native-mercury-result').textContent=e.message;}finally{b.disabled=false;}};
+    for(const [id,forget] of [['native-mercury-off',false],['native-mercury-forget',true]]){const button=$('#'+id);if(button)button.onclick=async()=>{await call('manager.typing_configure',{enabled:false,forget});$('#editor').close();await refresh();toast(forget?'Mercury key forgotten.':'Fresh ideas off.');};}
+  }
+  async function settings(){
+    const status=await call('manager.ai.status',{provider:'jev'});
+    dialog('Jev decisions',`<p>TypeSafe receives the text supplied to explicit decisions, split and duplicate checks, and selected public previews for ranking. Test the saved key before those requests.</p><p>${status.configured?'Configured; use Test to check the connection.':'Not configured.'}</p><label for="native-jev-key">TypeSafe API key</label><input id="native-jev-key" type="password" autocomplete="off" placeholder="${status.key_saved?'Saved — blank keeps it':'TypeSafe key'}"><p id="native-jev-result" role="status"></p><button type="button" id="native-jev-test" class="secondary" ${status.configured?'':'disabled'}>Test saved key</button>${status.key_saved?' <button type="button" id="native-jev-forget" class="quiet">Forget key</button>':''}`,'Save key',async()=>{
+      await call('manager.ai.configure',{provider:'jev',api_key:$('#native-jev-key').value,enabled:true});$('#native-jev-key').value='';toast('Jev configured. Test it to verify the connection.');
+    });
+    $('#native-jev-test').onclick=async()=>{const button=$('#native-jev-test');button.disabled=true;try{await call('manager.ai.test',{provider:'jev'});$('#native-jev-result').textContent='Provider responded successfully.';}catch(e){$('#native-jev-result').textContent=e.message;}finally{button.disabled=false;}};
+    const forget=$('#native-jev-forget');if(forget)forget.onclick=async()=>{await call('manager.ai.configure',{provider:'jev',enabled:false,forget:true});$('#editor').close();toast('Jev key forgotten.');};
+  }
+  function addLink(){
+    dialog('Add an inspiration link','<p>Save a link and your own description. The app does not fetch or verify the page.</p><label for="native-inspire-url">HTTP(S) URL</label><input id="native-inspire-url" type="url" maxlength="1500"><label for="native-inspire-title">Title</label><input id="native-inspire-title" maxlength="240"><label for="native-inspire-excerpt">Your note</label><textarea id="native-inspire-excerpt" maxlength="1000"></textarea><label for="native-inspire-category">Category</label><select id="native-inspire-category"><option value="showcases">Showcases</option><option value="models">Models</option><option value="cad">CAD & making</option><option value="science">Research</option><option value="docs">Docs</option></select>','Add link',async()=>{await call('manager.inspiration.add',{url:$('#native-inspire-url').value,title:$('#native-inspire-title').value,excerpt:$('#native-inspire-excerpt').value,category:$('#native-inspire-category').value});await DMInspiration.enter();toast('Link saved.');});
+  }
+  function mount(){
+    const root=document.getElementById('tool-results');if(!root)return;
+    const mercury=root.querySelector('[data-action="typing-model"]');
+    if(mercury){const card=mercury.closest('.tool-card');const copy=card?.querySelector('p');const message='Mercury 2 · '+(state.typing_generator?.configured?'configured':'off')+'. Suggestions use your words and matching saved project context. Configuration is not a connection test.';if(copy&&copy.textContent!==message)copy.textContent=message;
+      if(!root.querySelector('#native-jev-settings')){const node=document.createElement('div');node.className='tool-card';node.innerHTML='<h3>Jev decisions</h3><p>Configure and test a TypeSafe key for explicit structured decisions.</p><button type="button" class="secondary" id="native-jev-settings">Manage Jev</button>';card.after(node);node.querySelector('button').onclick=()=>settings().catch(e=>toast(e.message));}}
+    const refresh=root.querySelector('#inspire-refresh');if(refresh&&!root.querySelector('#native-inspire-add')){const button=document.createElement('button');button.type='button';button.id='native-inspire-add';button.className='secondary';button.textContent='Add link';button.onclick=addLink;refresh.after(button);}
+  }
+  document.addEventListener('click',event=>{if(event.target.closest('[data-action="typing-model"]')){event.preventDefault();event.stopImmediatePropagation();mercurySettings().catch(e=>toast(e.message));}},true);
+  document.addEventListener('close',event=>{if(event.target.id==='editor' && event.target.querySelector('#idea-title'))refresh().catch(()=>{});},true);
+  function init(){const root=document.getElementById('tool-results');if(root)new MutationObserver(mount).observe(root,{childList:true,subtree:true});mount();}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
+})();
