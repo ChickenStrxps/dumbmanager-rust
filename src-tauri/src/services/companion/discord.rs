@@ -47,11 +47,24 @@ fn reserve_job(id: &str, app: &str, token: &str, attachments: Vec<Value>) -> Leg
     {
         return Err(LegacyError::invalid("Invalid interaction continuation."));
     }
-    WORKERS
-        .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| {
-            (n < 4).then_some(n + 1)
-        })
-        .map_err(|_| LegacyError::unavailable("Discord attachment workers are busy; try again."))?;
+    // Keep compatibility with Rust 1.88, before AtomicUsize::try_update.
+    let mut workers = WORKERS.load(Ordering::Acquire);
+    loop {
+        if workers >= 4 {
+            return Err(LegacyError::unavailable(
+                "Discord attachment workers are busy; try again.",
+            ));
+        }
+        match WORKERS.compare_exchange_weak(
+            workers,
+            workers + 1,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) => break,
+            Err(current) => workers = current,
+        }
+    }
     let nonce = uuid::Uuid::new_v4().simple().to_string();
     ACTIVE
         .lock()

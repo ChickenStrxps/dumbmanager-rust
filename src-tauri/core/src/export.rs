@@ -275,16 +275,24 @@ impl ExportGate {
     }
 
     pub fn try_enter(&self) -> CoreResult<ExportPermit<'_>> {
-        self.running
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| {
-                (n < MAX_PARALLEL_EXPORTS).then_some(n + 1)
-            })
-            .map(|_| ExportPermit { gate: self })
-            .map_err(|_| {
-                CoreError::Busy(format!(
+        // Keep compatibility with Rust 1.88, before AtomicUsize::try_update.
+        let mut running = self.running.load(Ordering::Acquire);
+        loop {
+            if running >= MAX_PARALLEL_EXPORTS {
+                return Err(CoreError::Busy(format!(
                     "{MAX_PARALLEL_EXPORTS} card exports are already running. Try again when one finishes."
-                ))
-            })
+                )));
+            }
+            match self.running.compare_exchange_weak(
+                running,
+                running + 1,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => return Ok(ExportPermit { gate: self }),
+                Err(current) => running = current,
+            }
+        }
     }
 
     pub fn running(&self) -> usize {

@@ -209,7 +209,7 @@ fn ocr(image: RgbaImage) -> Result<Vec<Rect>, String> {
     };
     let (w, h) = image.dimensions();
     let mut bgra = image.into_raw();
-    for p in bgra.chunks_exact_mut(4) {
+    for p in bgra.as_chunks_mut::<4>().0 {
         p.swap(0, 2);
     }
     let writer = DataWriter::new().map_err(failure)?;
