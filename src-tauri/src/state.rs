@@ -107,6 +107,44 @@ impl AppState {
     }
 
     pub fn legacy_api(&self, path: &str, payload: &Value) -> LegacyResult<Value> {
+        let mut result = self.legacy_api_raw(path, payload)?;
+        if path != "/api/call" {
+            return Ok(result);
+        }
+        let name = payload.get("name").and_then(Value::as_str).unwrap_or("");
+        if !matches!(name, "manager.state" | "manager.list" | "manager.get") {
+            return Ok(result);
+        }
+        // Posting evidence lives in a separate service document. Join the current
+        // saved snapshot on reads so list/detail badges survive migration, reload,
+        // linking and unlinking without copying stale statuses into itch records.
+        let posting = self.runtime.read_document("social-post-links.json")?;
+        let annotate = |row: &mut Value| {
+            if let Some(id) = row.get("id").and_then(Value::as_str) {
+                let saved = posting.get(id).cloned().unwrap_or_else(|| {
+                    serde_json::json!({"itch_id":id,"state":"unknown","posts":[],
+                        "candidates":[],"candidate_count":0,"coverage":null,
+                        "note":"No external account check has been performed."})
+                });
+                row["posting"] = saved;
+            }
+        };
+        if name == "manager.get" {
+            annotate(&mut result);
+        } else {
+            let field = if name == "manager.state" {
+                "itches"
+            } else {
+                "items"
+            };
+            if let Some(rows) = result.get_mut(field).and_then(Value::as_array_mut) {
+                rows.iter_mut().for_each(annotate);
+            }
+        }
+        Ok(result)
+    }
+
+    fn legacy_api_raw(&self, path: &str, payload: &Value) -> LegacyResult<Value> {
         if matches!(path, "/api/upload" | "/api/itch-upload") {
             // Binary transport has a separate, narrow size limit. It cannot
             // enlarge arbitrary capability inputs or smuggle a filesystem path.
