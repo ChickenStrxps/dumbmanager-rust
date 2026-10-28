@@ -24,23 +24,30 @@ No listener, global shortcut or capture starts automatically.
   console. Unconfigured integrations remain unconfigured.
 - Opt-in phone HTTP listener with one-time invitations, HttpOnly sessions,
   CSRF/Host/Origin checks and a restricted itch/chat capability surface.
+- Signed Discord PING/text intake, scoped editable drafts, explicit stash and
+  named command registration. The remaining Discord workflows are incomplete.
 - Explicitly enabled global shortcuts, screen-region snipping into local evidence,
-  and user-facing shortcut diagnostics. The new selector passes compiler checks;
-  its interrupted UI check still needs to be completed.
+  and user-facing shortcut diagnostics. The selector passes compiler checks and
+  cancellation checks; a successful region capture still needs UI verification.
 
 ## Still required before full replacement
 
 - Selected-window replay capture and final snipping UI verification.
-- Signed Discord interaction routing and its end-to-end message workflows.
-- Complete learning-topic parity. The original public RSS and TypeSafe blog
-  adapters are now implemented; captured X still needs a configured source.
-- GitHub pull-request flow and any original capability not in the native registry.
+- Complete Discord attachment, destination, research, send and artwork workflows.
+- Captured X still needs an explicitly configured source; the original public
+  RSS/TypeSafe feeds and evidence-linked Learning topic guides are implemented.
+- Reconcile the original capability inventory against the native registry.
 - Final native UI, installer, microphone, clipboard-paste and real FFmpeg checks.
 - Independent review and user visual review of the integrated release candidate.
 
 Configured adapters have primarily been checked with isolated local fixtures;
 that does not establish live provider, T3, Discord, phone or proxy compatibility.
 No production message, webhook, account adoption or deployment was used for QA.
+
+The original Git panel has changes, history, branches, remotes and stash controls;
+it has no pull-request controls. A new GitHub pull-request interface is not a
+requirement of this 1:1 migration. See [release-checklist.md](release-checklist.md)
+for the remaining completion gates and recorded verification limits.
 
 ## Verification and repository contents
 

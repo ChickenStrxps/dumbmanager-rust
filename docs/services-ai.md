@@ -2,11 +2,17 @@
 
 This remains a partial port. Owned files are `src-tauri/src/services/ai.rs`, `src-tauri/src/services/ai/`, and `web/ai-native-settings.js`. No original install, credentials, runtime, or process was used. No external provider or production T3 request was made in QA.
 
-## Parent integration
+## Native integration
 
-- Register `services::ai::handle` before the local legacy fallback, and load `web/ai-native-settings.js` after the original frontend. Ensure the native call transport and capability registry expose `manager.research.send`, `manager.scout.search`, `manager.scout.read`, the existing research/learning/inspiration/scout calls and AI settings. Forward the transport's `t3_target` envelope when present. Research freezes the actual configured T3 target even without that envelope; a supplied target must match. A research worker needs an authorized route to `manager.research.record`; a scout worker needs authorized `manager.scout.search`, `manager.scout.read`, and `manager.propose`. The brief does not make these capabilities magically available to a T3 thread.
-- **Shared core change required:** implement `manager.merge` transactionally in the core legacy store, not via multiple service `legacy_call`s. Its frontend shape is `{id: duplicate_id, into: kept_id, request_key}` -> `{kept, archived}`. One SQLite transaction must validate different IDs, same project, eligible states and occurrence cap; copy occurrences marked `merged_from`, deduplicate attachments by ID, retain feedback and a bounded merge history, increment both versions/timestamps, archive the duplicate with `merged_into`, preserve both original records, and commit a stable idempotency receipt with the mutation. If a resolved kept record is allowed, reopen it as the original does. Handle concurrent changes, failed transactions, and same-key/different-input conflicts. See sibling `DumbAPI/dumbapi_core/manager.py` `op_merge` for exact original semantics. AI deliberately does not intercept this route: fake multi-call merging would lose data or duplicate history. Update the duplicate UI's merge-unavailable messaging until core exists.
-- Current code uses the existing planned `reqwest` 0.12 blocking/json/rustls, `url` 2, `sha2` 0.10, `uuid` 1/v4, `tungstenite` 0.28, core and serde_json. More original public feeds need a bounded XML/HTML parser; recommend `quick-xml` (for RSS/Atom) and an HTML parser for TypeSafe blog, with no DTD/entity expansion, fixed URL allowlist and bounded response/deadline. Do not add dependencies to the owned AI files alone; parent owns Cargo and lock. Do not inherit AnalyticsOne/X accounts.
+The native dispatcher and frontend settings are wired. Research freezes the
+configured T3 destination; a supplied target must match. Core duplicate merging
+is transactional and preserves both records, occurrence provenance and retry
+identity. The public feed adapters use bounded XML/HTML parsing as described
+below. No original credentials or captured X accounts are inherited.
+
+An external T3 research/scout worker still needs an explicitly authorized MCP
+connection to record reports or bounded source evidence. A prompt or a local
+capability name alone does not grant that access.
 
 ## Behavior implemented in this pass
 
@@ -19,7 +25,7 @@ This remains a partial port. Owned files are `src-tauri/src/services/ai.rs`, `sr
 
 ## Verification and limitations
 
-Before removal, the AI service suite passed 15 checks, including a loopback T3 WebSocket fixture that drops a response then checks stable command/message IDs and receipt recovery, isolated state, docs source, real URL parsing, ranking and duplicate judgment, indexed discovery, evidence location and 6/300 budget. `node --check web/ai-native-settings.js` passed. A transient shared-file compile error was resolved and the current rerun passed. The development test suite has since been removed from this repository at the owner's request. There was no live provider/feed test, real T3 send, original runtime, browser visual QA, release or merge. Network success, original full topic guides, all feed adapters and 1:1 parity are not claimed.
+Before removal, the AI service suite passed 15 checks, including a loopback T3 WebSocket fixture that drops a response then checks stable command/message IDs and receipt recovery, isolated state, docs source, real URL parsing, ranking and duplicate judgment, indexed discovery, evidence location and 6/300 budget. `node --check web/ai-native-settings.js` passed. A transient shared-file compile error was resolved and the current rerun passed. The development test suite has since been removed from this repository at the owner's request. Those checks did not contact a live provider, send to production T3, use the original runtime or establish full UI/release parity. The newer feed and Learning checks are recorded below.
 
 ## Public inspiration sources
 
@@ -32,3 +38,21 @@ passed for RSS/Atom, HTML extraction, deduplication, unsafe links, malformed inp
 and size bounds. An explicit Hugging Face request returned 18 bounded items.
 The remaining endpoints have not been exercised live. Test helpers remain
 outside the repository.
+
+## Learning trails
+
+The native content engine retains original topic guides for unittest, Node,
+Playwright, SQLite, GIFs and retry identity. A topic appears only beside a literal
+mention in saved work, commands or research; a request or capture context cannot
+establish that a tool was used. Desired outcomes, reported workspaces and
+environments, completed steps and accepted outcomes retain source links.
+
+Only explicit command-log entries become commands. Saved learning notes cite an
+exact non-sensitive report excerpt. New work invalidates stale notes and reading
+progress; acceptance alone preserves notes for the same work. Opening a trail
+runs no commands, model requests or environment scan.
+
+Twelve external fixture scenario groups passed for these content boundaries,
+source links, all six guides, context/provenance, sensitive text, eligibility and
+revision/progress behavior. Strict native Clippy passed. No new test suite or
+fixture runner is shipped in this repository.

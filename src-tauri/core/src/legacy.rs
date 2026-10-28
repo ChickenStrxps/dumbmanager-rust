@@ -246,10 +246,13 @@ pub fn call_envelope(payload: &Value) -> LegacyResult<(&str, Value)> {
 impl Store {
     /// Only the native T3 adapter calls this after a confirmed delivery. It is
     /// deliberately absent from the page's capability allowlist.
-    pub fn legacy_record_handoff(&mut self, payload:&Value)->LegacyResult<Value> {
-        let args=Args::new(payload,&["id","request_key","thread_id","message_id","at"])?;
-        let tx=self.write_tx()?;
-        let row=itches::record_handoff(&tx,&args)?;
+    pub fn legacy_record_handoff(&mut self, payload: &Value) -> LegacyResult<Value> {
+        let args = Args::new(
+            payload,
+            &["id", "request_key", "thread_id", "message_id", "at"],
+        )?;
+        let tx = self.write_tx()?;
+        let row = itches::record_handoff(&tx, &args)?;
         tx.commit()?;
         Ok(row)
     }
@@ -312,7 +315,12 @@ impl Store {
     /// Desktop-owned references are resolved against this installation's media
     /// catalog before entering the domain transaction. IPC cannot supply these
     /// objects directly; headless callers without that catalog retain refusal.
-    pub fn legacy_call_with_media(&mut self, name: &str, payload: &Value, media: Option<&[Value]>) -> LegacyResult<Value> {
+    pub fn legacy_call_with_media(
+        &mut self,
+        name: &str,
+        payload: &Value,
+        media: Option<&[Value]>,
+    ) -> LegacyResult<Value> {
         if name.len() > 100 || !payload.is_object() || payload.to_string().len() > 65_536 {
             return Err(LegacyError::invalid(
                 "Invalid or oversized capability request.",
@@ -518,19 +526,19 @@ fn list(conn: &Connection, args: &Args<'_>) -> LegacyResult<Value> {
     while let Some(raw) = cursor.next()? {
         let row = decode(&raw.get::<_, String>(0)?)?;
         if (project.is_empty() || row["project"] == project)
-                && (status.is_empty() || row["state"] == status)
-                && query
-                    .split_whitespace()
-                    .all(|word| row.to_string().to_lowercase().contains(word))
+            && (status.is_empty() || row["state"] == status)
+            && query
+                .split_whitespace()
+                .all(|word| row.to_string().to_lowercase().contains(word))
         {
-            if total >= offset && items.len() < limit { items.push(row); }
+            if total >= offset && items.len() < limit {
+                items.push(row);
+            }
             total += 1;
         }
     }
-    Ok(
-        json!({"items":items,"total":total,
-        "limit":limit,"next_offset":if offset+limit<total{Some(offset+limit)}else{None}}),
-    )
+    Ok(json!({"items":items,"total":total,
+        "limit":limit,"next_offset":if offset+limit<total{Some(offset+limit)}else{None}}))
 }
 
 fn setting(conn: &Connection, key: &str) -> CoreResult<Value> {

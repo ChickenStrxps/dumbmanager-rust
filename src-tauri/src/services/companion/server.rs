@@ -202,6 +202,28 @@ fn handle(app: &AppHandle, auth: &Mutex<Auth>, origins: &[String], mut r: Reques
         error(r, 404, "Not found.");
         return;
     }
+    if path == "/interactions" && r.method() == &Method::Post {
+        let signature = header(&r, "X-Signature-Ed25519").to_owned();
+        let timestamp = header(&r, "X-Signature-Timestamp").to_owned();
+        if r.body_length().is_none_or(|n| n == 0 || n > 65536) {
+            error(r, 400, "Invalid interaction body.");
+            return;
+        }
+        let mut raw = Vec::new();
+        if r.as_reader().take(65537).read_to_end(&mut raw).is_err() || raw.len() > 65536 {
+            error(r, 400, "Invalid interaction body.");
+            return;
+        }
+        let state = app.state::<AppState>();
+        match super::discord::receive(&state, &signature, &timestamp, &raw) {
+            Ok(v) => respond(r, json_response(200, v)),
+            Err(e) => respond(
+                r,
+                json_response(e.status, json!({"error":e.error,"code":e.code})),
+            ),
+        }
+        return;
+    }
     if r.method() == &Method::Post {
         if !origins.iter().any(|o| o == header(&r, "Origin"))
             || !matches!(header(&r, "Sec-Fetch-Site"), "" | "same-origin" | "none")

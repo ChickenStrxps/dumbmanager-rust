@@ -1,4 +1,5 @@
 //! Opt-in companion settings and listener. Nothing starts at application launch.
+mod discord;
 mod server;
 use crate::state::AppState;
 use dumbmanager_core::legacy::{self, LegacyError, LegacyResult};
@@ -80,7 +81,7 @@ fn bridge_status(state: &AppState) -> LegacyResult<Value> {
     let id = d["application_id"].as_str().unwrap_or("");
     let key = d["public_key"].as_str().unwrap_or("");
     Ok(
-        json!({"version":d["version"].as_u64().unwrap_or(0),"enabled":d["enabled"].as_bool().unwrap_or(false),"configured":!id.is_empty() && key.len()==64 && d["users"].as_array().is_some_and(|x|!x.is_empty()),"application_id":id,"public_key":key,"users":d["users"].as_array().cloned().unwrap_or_default(),"channels":d["channels"].as_array().cloned().unwrap_or_default(),"guilds":d["guilds"].as_array().cloned().unwrap_or_default(),"animated":d["animated"].as_bool().unwrap_or(true),"flashes":d["flashes"].as_bool().unwrap_or(false),"theme":d["theme"].as_str().unwrap_or(""),"bot_key_saved":state.runtime.secret(BOT_SECRET)?.is_some(),"signature_verifier":false,"last_verified_interaction":null,"interaction_available":false}),
+        json!({"version":d["version"].as_u64().unwrap_or(0),"enabled":d["enabled"].as_bool().unwrap_or(false),"configured":!id.is_empty() && key.len()==64 && d["users"].as_array().is_some_and(|x|!x.is_empty()),"application_id":id,"public_key":key,"users":d["users"].as_array().cloned().unwrap_or_default(),"channels":d["channels"].as_array().cloned().unwrap_or_default(),"guilds":d["guilds"].as_array().cloned().unwrap_or_default(),"animated":d["animated"].as_bool().unwrap_or(true),"flashes":d["flashes"].as_bool().unwrap_or(false),"theme":d["theme"].as_str().unwrap_or(""),"bot_key_saved":state.runtime.secret(BOT_SECRET)?.is_some(),"signature_verifier":true,"last_verified_interaction":null,"interaction_available":server::running()}),
     )
 }
 fn ids(v: &Value, key: &str) -> LegacyResult<Vec<String>> {
@@ -164,11 +165,36 @@ fn register(state: &AppState, v: &Value) -> LegacyResult<Value> {
     }
     let install=format!("https://discord.com/oauth2/authorize?client_id={app}&scope=applications.commands&integration_type=1");
     let guild_install=format!("https://discord.com/oauth2/authorize?client_id={app}&scope=applications.commands&integration_type=0");
-    // Do not register commands while their interaction endpoint is unavailable.
     if v["confirm"] == true {
-        return Err(LegacyError::unavailable(
-            "Discord interaction routing is not yet implemented; no commands were registered.",
-        ));
+        let token = state
+            .runtime
+            .secret(BOT_SECRET)?
+            .ok_or_else(|| LegacyError::invalid("Save a bot token first."))?;
+        let client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(12))
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(|_| LegacyError::unavailable("Could not initialize Discord client."))?;
+        for command in commands().as_array().unwrap() {
+            let response = client
+                .post(format!(
+                    "https://discord.com/api/v10/applications/{app}/commands"
+                ))
+                .header("Authorization", format!("Bot {token}"))
+                .json(command)
+                .send()
+                .map_err(|_| {
+                    LegacyError::unavailable(
+                        "Discord did not confirm all commands; retry registration.",
+                    )
+                })?;
+            if !response.status().is_success() {
+                return Err(LegacyError::unavailable("Discord did not confirm all commands; check the application and token, then retry."));
+            }
+        }
+        return Ok(
+            json!({"registered":true,"commands":commands(),"install_url":install,"guild_install_url":guild_install}),
+        );
     }
     Ok(
         json!({"registered":false,"commands":commands(),"install_url":install,"guild_install_url":guild_install}),

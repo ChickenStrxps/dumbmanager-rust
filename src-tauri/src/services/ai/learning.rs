@@ -34,132 +34,15 @@ pub(super) fn safe(s: &str) -> String {
         .take(2400)
         .collect()
 }
+#[path = "learning_content.rs"]
+mod content;
 fn get(state: &AppState, id: &str) -> LegacyResult<Value> {
     let row = state
         .store()
         .legacy_call("manager.get", &json!({"id":id}))?;
-    let ready = ["ready", "resolved"].contains(&row["state"].as_str().unwrap_or(""))
-        || row["run_state"] == "agent_reported_done";
-    let eligible =
-        ready && !["archived", "needs_description"].contains(&row["state"].as_str().unwrap_or(""));
-    let mut sources = vec![
-        json!({"id":"observation","label":"Original request","text":safe(row["original"].as_str().filter(|s|!s.is_empty()).or_else(||row["title"].as_str()).unwrap_or("")),"kind":"request"}),
-    ];
-    for p in row["plan"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter(|p| p["done"] == true)
-        .take(16)
-    {
-        sources.push(json!({"id":format!("plan:{}",p["id"].as_str().unwrap_or("")),"label":"Reported completed step","text":safe(p["text"].as_str().unwrap_or("")),"kind":"report"}));
-    }
-    for (i, e) in row["evidence"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .enumerate()
-        .take(16)
-    {
-        if let Some(summary) = e["summary"].as_str() {
-            sources.push(json!({"id":format!("evidence:{i}:summary"),"label":"Saved result summary","text":safe(summary),"kind":"report"}));
-        }
-        for (j, cmd) in e["commands"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .take(8)
-            .enumerate()
-        {
-            if let Some(s) = cmd.as_str() {
-                sources.push(json!({"id":format!("evidence:{i}:command:{j}"),"label":"Reported command","text":safe(s),"kind":"command"}));
-            }
-        }
-    }
-    // Research excerpts are reported evidence, not independently verified source reads.
     let research = state.runtime.read_document("ai-research.json")?;
-    for run in research["runs"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter(|r| r["itch_id"] == id)
-        .rev()
-        .take(4)
-    {
-        for report in run["reports"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .rev()
-            .take(3)
-        {
-            for source in report["sources"].as_array().into_iter().flatten().take(8) {
-                let excerpt = safe(source["excerpt"].as_str().unwrap_or(""));
-                if !excerpt.is_empty() && excerpt != "[Credential-bearing text omitted]" {
-                    sources.push(json!({"id":format!("research:{}:{}",report["id"].as_str().unwrap_or(""),source["id"].as_str().unwrap_or("")),"label":format!("Research report source: {}",source["title"].as_str().unwrap_or("Untitled")),"text":excerpt,"kind":"research","url":source["url"],"path":source["path"],"provenance":"Reported excerpt; not independently verified."}));
-                }
-            }
-        }
-    }
-    let basis = digest(&json!([id, row["state"], sources]));
     let doc = state.runtime.read_document(DOC)?;
-    let saved = &doc["notes"][id];
-    let stale = saved.is_object() && saved["basis"] != basis;
-    let notes = if stale {
-        Value::Null
-    } else {
-        saved["notes"].clone()
-    };
-    let mut lessons = Vec::new();
-    let mut commands = Vec::new();
-    let mut packages = Vec::new();
-    if eligible {
-        let work = sources.iter().find(|s| s["kind"] == "report");
-        let (explanation, ids) = if let Some(s) = work {
-            (format!("The saved work reports: {}\n\nThis is reported history, not a new verification.",s["text"].as_str().unwrap_or("")),json!(["observation",s["id"]]))
-        } else {
-            ("This itch is ready or accepted, but no completed step or result summary was saved. The implementation cannot be inferred from its title.".to_string(),json!(["observation"]))
-        };
-        lessons.push(json!({"id":format!("{}-review-{}",id,basis),"title":"Review the saved work","explanation":explanation,"try_this":"Compare the request with the saved evidence and identify what still needs checking.","question":"Does opening this trail rerun the work or tests?","answer":"No. This trail only reads saved records.","source_ids":ids}));
-        for s in sources
-            .iter()
-            .filter(|s| s["kind"] == "command" && s["text"] != "[Credential-bearing text omitted]")
-            .take(8)
-        {
-            commands.push(json!({"command":s["text"],"explanation":"Saved in the work report. Review arguments and workspace before reuse.","caution":"Reported history; this view does not run or verify it.","source_ids":[s["id"]],"kind":"Recorded command"}));
-        }
-        for entry in notes["lessons"].as_array().into_iter().flatten().take(6) {
-            let mut l = entry.clone();
-            l["id"] = json!(format!("{}-note-{}", id, digest(entry)));
-            l["source_ids"] = json!([entry["source_id"]]);
-            lessons.push(l);
-        }
-        for entry in notes["commands"].as_array().into_iter().flatten().take(6) {
-            let mut c = entry.clone();
-            c["source_ids"] = json!([entry["source_id"]]);
-            c["kind"] = json!("Recorded command");
-            commands.push(c);
-        }
-        for entry in notes["packages"].as_array().into_iter().flatten().take(6) {
-            let mut p = entry.clone();
-            p["source_ids"] = json!([entry["source_id"]]);
-            p["kind"] = json!("Agent-written package tip");
-            p["docs"] = json!("");
-            packages.push(p);
-        }
-    }
-    let revision = digest(&json!([basis, notes]));
-    let progress = doc["progress"][id].clone();
-    let valid: Vec<_> = progress["read"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter(|v| lessons.iter().any(|l| l["id"] == **v))
-        .cloned()
-        .collect();
-    Ok(
-        json!({"id":id,"title":safe(row["title"].as_str().unwrap_or("")),"project":row["project"],"eligible":eligible,"stage":if row["state"]=="resolved"{"Accepted by you"}else if eligible{"Ready to test"}else{"Work not finished"},"revision":revision,"source_revision":basis,"work_revision":basis,"itch_version":row["version"],"workspace":"","environment":"","workspace_note":"No workspace was independently verified.","lessons":lessons,"commands":commands,"packages":packages,"sources":sources,"notes_stale":stale,"notes_version":saved["version"].as_u64().unwrap_or(0),"progress":{"version":progress["version"].as_u64().unwrap_or(0),"read":valid,"total":lessons.len()},"coverage":"Built locally from this itch's saved work. Reports are not rerun and dependencies are not inferred."}),
-    )
+    Ok(content::build(&row, &research, &doc))
 }
 fn record(state: &AppState, args: &Value) -> LegacyResult<Value> {
     fields(args, &["id", "revision", "notes"])?;
