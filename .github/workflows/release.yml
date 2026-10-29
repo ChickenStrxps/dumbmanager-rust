@@ -34,8 +34,9 @@ jobs:
           $version = python tools/release_manifest.py check
           if ($LASTEXITCODE -ne 0) { throw 'Release configuration validation failed.' }
           "VERSION=$version" >> $env:GITHUB_ENV
-          gh api "repos/$env:GITHUB_REPOSITORY/git/ref/tags/v$version" 2>$null | Out-Null
-          if ($LASTEXITCODE -eq 0) { throw 'Release tag already exists; do not overwrite it.' }
+          $tags = gh api "repos/$env:GITHUB_REPOSITORY/git/matching-refs/tags/v$version" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Could not check existing release tags.' }
+          if (@($tags | Where-Object { $_.ref -eq "refs/tags/v$version" }).Count -ne 0) { throw 'Release tag already exists; do not overwrite it.' }
       - uses: actions/setup-node@v4
         with:
           node-version: 24
