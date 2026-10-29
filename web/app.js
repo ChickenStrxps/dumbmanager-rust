@@ -68,17 +68,21 @@ let settingsTab='shortcuts',workspaceView='now',workspaceScroll=0;
 let appReady=false;
 let toolTab='stats',toolResults={stats:null,batches:null,queue:null,social:null,inspiration:null},toolPages={},jobItems=[],feedPage=0;
 const pageKey='dm-page-v1',pageViews=['now','inbox','wins','tools','git','browse','setup'];
+const pageFilters=['all','ready','needs_description','suggested','open','working'];
 let restoringPage=true,pageTimer=null;
 function pageHash(page){
-  if(page.drawer&&page.view==='now')return '#drawer';
   const query=new URLSearchParams();
+  if(['now','inbox','wins'].includes(page.view)){
+    if(pageFilters.includes(page.filter)&&page.filter!=='all')query.set('filter',page.filter);
+    if(Number.isInteger(page.feedPage)&&page.feedPage>0)query.set('page',String(Math.min(page.feedPage,100000)));
+  }
   if(page.view==='tools'){query.set('tab',page.toolTab);if(page.toolTab==='social'&&page.social?.itch)query.set('post',page.social.itch);}
   if(page.view==='tools'&&page.toolTab==='inspiration'){query.set('topic',page.inspiration.category);if(page.inspiration.query)query.set('spark',page.inspiration.query);if(page.inspiration.saved)query.set('shelf','1');if(page.inspiration.offset)query.set('signal_page',String(page.inspiration.offset));}
   if(page.view==='setup')query.set('tab',page.settingsTab);
   if(page.itch)query.set('itch',page.itch);
   if(page.itch&&page.learning?.itch===page.itch){query.set('learn',page.learning.section);if(page.learning.lesson)query.set('lesson',page.learning.lesson);}
   if(page.itch&&page.research?.itch===page.itch){query.set('research',page.research.section);if(page.research.run)query.set('research_run',page.research.run);if(page.research.report)query.set('research_report',page.research.report);}
-  return '#'+page.view+(query.size?'?'+query:'');
+  return '#'+(page.drawer&&page.view==='now'?'drawer':page.view)+(query.size?'?'+query:'');
 }
 function rememberPage(){
   if(restoringPage||!appReady)return;
@@ -98,7 +102,8 @@ function savedPage(){
   if(hash==='#drawer')return {view:'now',drawer:true};
   if(hash.startsWith('#itch='))return {view:'inbox',itch:hash.slice(6)};
   const [next,query='']=hash.slice(1).split('?'),params=new URLSearchParams(query);
-  return {view:pageViews.includes(next)?next:'now',toolTab:params.get('tab'),settingsTab:params.get('tab'),inspiration:{category:params.get('topic'),query:params.get('spark'),saved:params.get('shelf')==='1',offset:Number(params.get('signal_page')||0)},
+  const rawPage=params.get('page')||'0',feedPage=/^\d{1,6}$/.test(rawPage)?Math.min(Number(rawPage),100000):0;
+  return {view:pageViews.includes(next)?next:'now',drawer:next==='drawer',filter:pageFilters.includes(params.get('filter'))?params.get('filter'):'all',feedPage,toolTab:params.get('tab'),settingsTab:params.get('tab'),inspiration:{category:params.get('topic'),query:params.get('spark'),saved:params.get('shelf')==='1',offset:Number(params.get('signal_page')||0)},
     social:{itch:params.get('post')},itch:params.get('itch'),learning:params.get('itch')&&['learn','commands','tools'].includes(params.get('learn'))?{itch:params.get('itch'),section:params.get('learn'),lesson:params.get('lesson')}:null,research:params.get('itch')&&['findings','plan','sources','brief'].includes(params.get('research'))?{itch:params.get('itch'),section:params.get('research'),run:params.get('research_run'),report:params.get('research_report')}:null};
 }
 async function restorePage(page){
@@ -108,7 +113,7 @@ async function restorePage(page){
   await setView(page.view,page);
   if(pageViews.includes(page.workspaceView)&&page.workspaceView!=='setup')workspaceView=page.workspaceView;
   workspaceScroll=Number.isFinite(page.workspaceScroll)?Math.max(0,page.workspaceScroll):0;
-  if(['all','ready','needs_description','suggested','open','working'].includes(page.filter))filter=page.filter;
+  if(pageFilters.includes(page.filter))filter=page.filter;
   feedPage=Number.isInteger(page.feedPage)?Math.max(0,Math.min(page.feedPage,100000)):0;
   $('#search').value=typeof page.search==='string'?page.search.slice(0,500):'';
   document.querySelectorAll('[data-filter]').forEach(b=>b.classList.toggle('active',b.dataset.filter===filter));
