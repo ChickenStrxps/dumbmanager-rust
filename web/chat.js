@@ -80,7 +80,13 @@ window.DMChat=(()=>{
     $('#chat-thread').onchange=async()=>{drafts.set(target,$('#command').value);target=$('#chat-thread').value;$('#command').value=drafts.get(target)||'';snapshot=null;readGeneration++;loading=false;error='';render();updateSuggestions();await read();};
     $('#chat-refresh').onclick=async()=>{await loadThreads();await read();};
     $('#chat-retry').onclick=()=>send('',true);
-    $('#chat-dismiss').onclick=()=>{pending=null;keepPending();render();toast('Dismissed. Check T3 before sending it again.');};
+    $('#chat-dismiss').onclick=()=>{
+      pending=null;
+      let saved=true;
+      try{keepPending();}catch{saved=false;}
+      render();
+      toast(saved?'Dismissed. Check T3 before sending it again.':'Dismissed for this session. Browser storage could not be cleared, so the message may return after reload. Check T3 before sending it again.');
+    };
     document.addEventListener('visibilitychange',()=>{if(document.hidden)clearTimeout(timer);else if(enabled)read();});
   }
   return {init,mode,send,workspace,candidates,decorate,context:ctx,get activityRevision(){return snapshot?.messages?.map(m=>m.id+':'+m.text?.length+':'+m.text?.slice(-80)).join('|')||'';},get enabled(){return enabled;},get target(){return target;},get sending(){return sending;}};
