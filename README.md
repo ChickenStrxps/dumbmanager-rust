@@ -12,9 +12,12 @@ as a replacement.
 
 ## Run on Windows
 
-Download the Windows build artifact and run the setup executable. WebView2 is
+Download the Windows installer from [Releases](https://github.com/ChickenStrxps/dumbmanager-rust/releases)
+and run the setup executable. WebView2 is
 required. Keep `LICENSE` and `THIRD_PARTY_NOTICES.txt` alongside a standalone EXE.
 MCP clients use the separate `dumbmanager-mcp.exe` console program.
+Settings → Connections includes signed application updates and an optional startup
+check. Installation always requires confirmation. See [release/update setup](docs/updates.md).
 
 ## Available services
 
@@ -31,12 +34,15 @@ MCP clients use the separate `dumbmanager-mcp.exe` console program.
 External services start unconfigured and use your own credentials. Provider,
 phone and external-client compatibility still need live checks. Desktop snipping
 and selected-window replay are implemented and checked with synthetic windows;
-live Discord delivery and Windows clipboard paste remain unverified.
+live Discord delivery and Windows clipboard paste remain unverified. Mercury and
+Jev connection tests, read-only T3 thread discovery and Discord bot/application
+authentication have passed using this edition's saved configuration. These checks
+do not establish end-to-end delivery, phone access or microphone/audio behavior.
 No successful connection or operation is simulated.
 
 ## Build from source
 
-Install Rust 1.88 or newer with the Windows MSVC toolchain, Microsoft C++ Build
+Install Rust 1.90 or newer with the Windows MSVC toolchain, Microsoft C++ Build
 Tools, WebView2, Node.js 24 and Python 3 for dependency license collection.
 See the [Tauri Windows prerequisites](https://v2.tauri.app/start/prerequisites/#windows).
 

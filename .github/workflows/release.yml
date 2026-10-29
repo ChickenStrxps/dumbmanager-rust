@@ -1,0 +1,84 @@
+name: Signed Windows release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: signed-windows-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'ChickenStrxps/dumbmanager-rust' && github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Require successful Windows CI on this main commit
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $head = gh api repos/$env:GITHUB_REPOSITORY/commits/main --jq .sha
+          if ($LASTEXITCODE -ne 0 -or $head -ne $env:EXPECTED_SHA) { throw 'Dispatch the workflow from the current main commit.' }
+          $runs = gh api "repos/$env:GITHUB_REPOSITORY/actions/workflows/windows.yml/runs?head_sha=$env:EXPECTED_SHA&branch=main&status=success&per_page=100" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or @($runs.workflow_runs | Where-Object { $_.head_sha -eq $env:EXPECTED_SHA -and $_.conclusion -eq 'success' }).Count -eq 0) { throw 'Windows CI must pass on this exact main commit.' }
+          $version = python tools/release_manifest.py check
+          if ($LASTEXITCODE -ne 0) { throw 'Release configuration validation failed.' }
+          "VERSION=$version" >> $env:GITHUB_ENV
+          $tags = gh api "repos/$env:GITHUB_REPOSITORY/git/matching-refs/tags/v$version" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Could not check existing release tags.' }
+          if (@($tags | Where-Object { $_.ref -eq "refs/tags/v$version" }).Count -ne 0) { throw 'Release tag already exists; do not overwrite it.' }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            src-tauri -> target
+            crates/card-renderer -> target
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Build and sign NSIS updater artifact
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:TAURI_SIGNING_PRIVATE_KEY) { throw 'The update signing key is required.' }
+          python tools/generate-notices.py
+          if ($LASTEXITCODE -ne 0) { throw 'Notice generation failed.' }
+          & node_modules/.bin/tauri.cmd build --ci --no-bundle
+          if ($LASTEXITCODE -ne 0) { throw 'Desktop build failed.' }
+          cargo build --manifest-path src-tauri/Cargo.toml --release --locked --bin dumbmanager-mcp
+          if ($LASTEXITCODE -ne 0) { throw 'MCP build failed.' }
+          & node_modules/.bin/tauri.cmd bundle --ci --bundles nsis --config tools/tauri.release.conf.json
+          if ($LASTEXITCODE -ne 0) { throw 'Signed bundle failed.' }
+          $installers = @(Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe)
+          if ($installers.Count -ne 1) { throw 'Expected exactly one NSIS installer.' }
+          python tools/release_manifest.py manifest $installers[0].FullName
+          if ($LASTEXITCODE -ne 0) { throw 'Manifest validation failed.' }
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          git archive --format=zip --output=artifacts/DumbManager-Rust-source.zip $env:GITHUB_SHA
+          if ($LASTEXITCODE -ne 0) { throw 'Source archive failed.' }
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = (Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe).FullName
+          gh release create "v$env:VERSION" --target $env:GITHUB_SHA --title "DumbManager Rust $env:VERSION" --notes-file docs/release-notes.md --draft $installer "$installer.sig" src-tauri/target/release/bundle/nsis/latest.json artifacts/DumbManager-Rust-source.zip
+          if ($LASTEXITCODE -ne 0) { throw 'Draft release creation failed; inspect GitHub before retrying.' }
+          gh release edit "v$env:VERSION" --draft=false --latest
+          if ($LASTEXITCODE -ne 0) { throw 'Release remains a draft; inspect it before publishing.' }

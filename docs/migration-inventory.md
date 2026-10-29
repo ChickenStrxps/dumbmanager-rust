@@ -42,10 +42,13 @@ No listener, global shortcut or capture starts automatically.
 - Native capture/edit/evidence/review/reload checks passed in a hidden WebView.
   Final installer inspection, live microphone and clipboard-paste checks remain.
   Real FFmpeg conversion passed with synthetic video.
-- Independent review and user visual review of the integrated release candidate.
+- The restored interface was independently reviewed, visually approved and merged.
+  Signed updates and public cleanup have their own PR and release checks.
 
-Configured adapters have primarily been checked with isolated local fixtures;
-that does not establish live provider, T3, Discord, phone or proxy compatibility.
+Mercury/Jev connection tests, T3 thread discovery and Discord bot/application
+authentication passed live with this edition's configuration. Other behavior has
+primarily been checked with isolated fixtures; phone/proxy, audio and end-to-end
+external delivery remain unverified.
 No production message, webhook, account adoption or deployment was used for QA.
 
 The original Git panel has changes, history, branches, remotes and stash controls;

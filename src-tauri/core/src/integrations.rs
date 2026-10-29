@@ -77,11 +77,5 @@ pub fn integration_statuses(card_renderer_ready: bool) -> Vec<IntegrationStatus>
             Unavailable,
             NOT_MIGRATED,
         ),
-        status(
-            "analytics-one",
-            "AnalyticsOne stats",
-            Unavailable,
-            NOT_MIGRATED,
-        ),
     ]
 }

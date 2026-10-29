@@ -13,6 +13,8 @@ const COMMANDS: &[&str] = &[
     "open_export_folder",
     "choose_path",
     "legacy_api",
+    "update_check",
+    "update_install",
 ];
 
 fn main() {

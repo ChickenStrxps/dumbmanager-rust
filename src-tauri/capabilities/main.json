@@ -3,7 +3,9 @@
   "identifier": "main",
   "description": "Bundled main UI may call native commands and receive shortcut events. No remote origins or other plugin APIs.",
   "local": true,
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:event:allow-listen",
     "core:event:allow-unlisten",
@@ -16,6 +18,8 @@
     "allow-card-export",
     "allow-open-export-folder",
     "allow-choose-path",
-    "allow-legacy-api"
+    "allow-legacy-api",
+    "allow-update-check",
+    "allow-update-install"
   ]
 }

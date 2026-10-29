@@ -41,8 +41,7 @@ Required first-party local flows, using original names and snake_case fields:
   refresh. `manager.repeat`, `manager.settings` (`{motion:<boolean>}`), `manager.export`,
   `manager.context.select`, and `projects.list` should be implemented locally or
   return an explicit unavailable error. A real empty project list uses `{items:[]}`.
-- Startup also asks `t3.distributions`, `t3.threads`, `analytics.suggest`,
-  `anime.batches`, and `/api/replay` `{action:'status'}`. These may be unavailable; do not fabricate a
+- Startup also asks `t3.distributions`, `t3.threads`, `/api/replay` `{action:'status'}`. These may be unavailable; do not fabricate a
   connection, installed account, helper, window, replay, thread, source, or job.
 - Opening an itch uses `/api/cook` focus/status/prepare/clear/unfocus and
   `/api/native` status. Missing integrations must not prevent local detail/edit/

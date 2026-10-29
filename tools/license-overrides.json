@@ -151,5 +151,20 @@
   "winapi-x86_64-pc-windows-gnu@0.4.0": [
     "licenses/upstream/winapi-rs/LICENSE-MIT",
     "licenses/upstream/winapi-rs/NOTICE.txt"
+  ],
+  "jni@0.22.4": [
+    "licenses/upstream/jni/0.22.4/LICENSE-MIT"
+  ],
+  "jni-macros@0.22.4": [
+    "licenses/upstream/jni-macros/0.22.4/LICENSE-MIT"
+  ],
+  "objc2-osa-kit@0.3.2": [
+    "licenses/upstream/objc2/LICENSE-MIT.txt"
+  ],
+  "rustls-platform-verifier-android@0.2.0": [
+    "licenses/upstream/rustls-platform-verifier-android/0.2.0/LICENSE-MIT"
+  ],
+  "tauri-plugin@2.7.2": [
+    "licenses/upstream/tauri-plugin/2.7.2/LICENSE-MIT"
   ]
 }

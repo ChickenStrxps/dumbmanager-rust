@@ -27,7 +27,7 @@ const today = s => new Date(s).toDateString() === new Date().toDateString();
 const fmt = n => n === null || n === undefined ? 'Unknown' : new Intl.NumberFormat(undefined,{maximumFractionDigits:2}).format(n);
 let state={itches:[],contexts:[],preferences:{motion:true}}, view='now', filter='all', selected=null, project='unsorted';
 let stateError='';
-let suggestions=[], suggestionIndex=-1, sources={stats:[],batches:[]}, sourceStatus={}, toastTimer, syncing=false, saving=false;
+let suggestions=[], suggestionIndex=-1, toastTimer, syncing=false, saving=false;
 let replayCaptureKey='';
 async function beginCaptureReplay(){
   if(!replayCaptureKey)replayCaptureKey=uid();
@@ -37,7 +37,6 @@ let replayState={}, nativeState={}, replayWindows=[], selectedReplayWindow='', t
 let renderedDetailId=null, renderedDetailVersion=0, renderedPosting="";
 let outbox;
 let dialogSequence=0;
-let commandLoadPromise=null, sourceLoading=false;
 // T3 titles are separate from the task notes that agents publish for typing.
 const contextThreads=new Map(),contextSearches=new Map();
 let contextThreadLoad=null,contextThreadQuery='',contextThreadError='',contextThreadPartial=false,contextSearchTimer;
@@ -66,7 +65,7 @@ async function loadContextThreads(query=''){
 let nativeTimer=null,nativeBusy=false;
 let settingsTab='shortcuts',workspaceView='now',workspaceScroll=0;
 let appReady=false;
-let toolTab='stats',toolResults={stats:null,batches:null,queue:null,social:null,inspiration:null},toolPages={},jobItems=[],feedPage=0;
+let toolTab='inspiration',toolResults={social:null,inspiration:null},toolPages={},jobItems=[],feedPage=0;
 const pageKey='dm-page-v1',pageViews=['now','inbox','wins','tools','git','browse','setup'];
 const pageFilters=['all','ready','needs_description','suggested','open','working'];
 let restoringPage=true,pageTimer=null;
@@ -107,7 +106,7 @@ function savedPage(){
     social:{itch:params.get('post')},itch:params.get('itch'),learning:params.get('itch')&&['learn','commands','tools'].includes(params.get('learn'))?{itch:params.get('itch'),section:params.get('learn'),lesson:params.get('lesson')}:null,research:params.get('itch')&&['findings','plan','sources','brief'].includes(params.get('research'))?{itch:params.get('itch'),section:params.get('research'),run:params.get('research_run'),report:params.get('research_report')}:null};
 }
 async function restorePage(page){
-  if(['stats','batches','social','queue','inspiration'].includes(page.toolTab))toolTab=page.toolTab;
+  if(['social','inspiration'].includes(page.toolTab))toolTab=page.toolTab;
   if(['shortcuts','replay','appearance','connections','ai','bridge','posting','data'].includes(page.settingsTab))settingsTab=page.settingsTab;
   if(!context()&&typeof page.project==='string'&&[...$('#project').options].some(o=>o.value===page.project))project=page.project;
   await setView(page.view,page);
@@ -142,8 +141,8 @@ function paged(items,key,size=3){
   return {items:items.slice(page*size,(page+1)*size),nav:items.length>size?`<nav class="result-pages" aria-label="${esc(key)} pages"><button class="secondary" data-tool-page="${esc(key)}" data-page="${page-1}" ${page===0?'disabled':''}>← Back</button><span>${page*size+1}–${Math.min(items.length,(page+1)*size)} / ${items.length}</span><button class="secondary" data-tool-page="${esc(key)}" data-page="${page+1}" ${page===count-1?'disabled':''}>More →</button></nav>`:''};
 }
 function selectTool(tab){
-  if(!['stats','batches','queue','social','inspiration'].includes(tab))return;
-  toolTab=tab;toolResult=toolResults[tab];if(tab==='inspiration')DMInspiration.enter();renderTools();if(tab==='queue')jobs();if(tab==='social')DMSocial.resume();if(tab==='stats')DMSocial.loadHandles();
+  if(!['social','inspiration'].includes(tab))return;
+  toolTab=tab;toolResult=toolResults[tab];if(tab==='inspiration')DMInspiration.enter();renderTools();if(tab==='queue')jobs();if(tab==='social')DMSocial.resume();
   rememberPage();
 }
 function toolAnswer(tab,result){toolResults[tab]=result;if(toolTab===tab){toolResult=result;renderTools();}}
@@ -292,21 +291,8 @@ function rank(query,candidate){
   for(const w of words){const index=target.findIndex((t,i)=>i>=from&&t.startsWith(w));if(index<0)return c.includes(q)?65:0;from=index+1;}
   return 80-from/10;
 }
-async function loadCommands(force=false){
-  if(commandLoadPromise)return commandLoadPromise;
-  if(commandsLoaded&&!force)return;
-  sourceLoading=true;drawSuggestions();signal('Loading saved handles and batches…','LOCAL','load');
-  commandLoadPromise=(async()=>{
-    try{
-      const results=await Promise.allSettled([call('analytics.suggest',{limit:100}),call('anime.batches',{limit:100})]);
-      if(results[0].status==='fulfilled'){sources.stats=results[0].value.items;sourceStatus.stats='Recorded handles and sampled content';}else sourceStatus.stats=results[0].reason.message;
-      if(results[1].status==='fulfilled'){sources.batches=results[1].value.items;sourceStatus.batches='Existing saved batches';}else sourceStatus.batches=results[1].reason.message;
-      commandsLoaded=true;
-    }finally{sourceLoading=false;commandLoadPromise=null;updateSuggestions();}
-  })();
-  return commandLoadPromise;
-}
-function commandMode(){const t=$('#command').value;return /^\/share(?:\s|$)/.test(t)?'share':t.startsWith('/stats ')?'stats':t.startsWith('/batch ')?'batch':t.startsWith('/find ')?'find':t.startsWith('/open ')?'open':t.startsWith('/chat ')?'chat-entry':t.startsWith('/')?'command':DMChat.enabled?'chat':DMIntake.splitting?'split':'itch';}
+async function loadCommands(){ commandsLoaded=true; }
+function commandMode(){const t=$('#command').value;return /^\/share(?:\s|$)/.test(t)?'share':t.startsWith('/find ')?'find':t.startsWith('/open ')?'open':t.startsWith('/chat ')?'chat-entry':t.startsWith('/')?'command':DMChat.enabled?'chat':DMIntake.splitting?'split':'itch';}
 function updateSuggestions(){
   const started=performance.now(), input=$('#command').value, mode=commandMode();
   let pool=[],query=input;
@@ -314,10 +300,6 @@ function updateSuggestions(){
     pool=DMChat.candidates().map(label=>({type:'T3 context',label,value:label}));
   }else if(mode==='chat-entry'){
     query='';pool=[{type:'T3 chat',label:'Chat in the pinned T3 thread',value:'/chat '}];
-  }else if(mode==='stats'){
-    query=input.slice(7);pool=sources.stats.map(r=>({type:r.type,label:r.label,value:r.target,data:r,search:[r.label,r.url,r.target,r.platform].join(' ')}));
-  }else if(mode==='batch'){
-    query=input.slice(7);pool=sources.batches.map(r=>({type:'batch',label:r.id+' · '+r.count+' edits',value:r.manifest,data:r,search:r.id+' '+r.request}));
   }else if(mode==='find'){
     query=input.slice(6);pool=state.itches.filter(DMIntake.usable).map(r=>({type:'saved itch',label:r.title,value:r.id,search:r.title+' '+r.key}));
   }else if(mode==='share'){
@@ -325,7 +307,7 @@ function updateSuggestions(){
   }else if(mode==='open'){
     query=input.slice(6);pool=state.contexts.map(c=>({type:'T3 thread',label:contextTitle(c),value:c.id,search:[c.project,c.task,c.thread_id,contextTitle(c)].join(' ')}));
   }else if(mode==='command'){
-    pool=[{type:'social',label:'/share ? preview a completion post',value:'/share '},{type:'T3 chat',label:'/chat — talk to a T3 thread',value:'/chat '},{type:'read stats',label:'/stats — handle, video link or ID',value:'/stats '},{type:'batch',label:'/batch — open a saved batch',value:'/batch '},{type:'find',label:'/find — search saved itches',value:'/find '},{type:'T3 thread',label:'/open — jump to a T3 thread',value:'/open '}];query=input.slice(1);
+    pool=[{type:'social',label:'/share ? preview a completion post',value:'/share '},{type:'T3 chat',label:'/chat — talk to a T3 thread',value:'/chat '},{type:'find',label:'/find — search saved itches',value:'/find '},{type:'T3 thread',label:'/open — jump to a T3 thread',value:'/open '}];query=input.slice(1);
   }else{
     const ctx=context();
     pool=[...(ctx?.candidates||[]).map(label=>({type:'context',label,value:label})),
@@ -338,21 +320,19 @@ function updateSuggestions(){
   if(assisted?.items?.length)suggestions=assisted.items.slice(0,5).map(s=>({label:s.text,value:s.text,kind:s.kind,quality:s.quality,type:s.kind==='idea'?'idea':s.source==='jev'?'Jev':s.kind==='word'?'word':'context'}));
   if(mode==='split'||(['itch','chat'].includes(mode)&&input.trim().length<2))suggestions=[];
   suggestionIndex=-1;
-  $('#stash').innerHTML=mode==='split'?'Split it ↵':mode==='chat'?(DMChat.sending?'Sending…':'Send to T3 ↵'):mode==='chat-entry'?'Open chat ↗':mode==='stats'?'Check it ↵':mode==='find'?'Find it ↵':mode==='batch'?'Open batch ↵':mode==='open'?'Open thread ↗':'Stash it <span>↵</span>';
+  $('#stash').innerHTML=mode==='split'?'Split it ↵':mode==='chat'?(DMChat.sending?'Sending…':'Send to T3 ↵'):mode==='chat-entry'?'Open chat ↗':mode==='find'?'Find it ↵':mode==='open'?'Open thread ↗':'Stash it <span>↵</span>';
   $('#stash').disabled=saving||DMUploads.busy||DMIntake.splitBusy||(mode==='chat'&&DMChat.sending);
   $('#command').maxLength=mode==='split'?4000:mode==='chat'?12000:500;
   $('#command').placeholder=mode==='split'?'fix the login, add search, make the buttons bigger…':mode==='chat'?'message your T3 thread…':'a few words… or / for commands';
-  $('#command-label').textContent=mode==='split'?'drop the whole batch':mode==='chat'?'say it to T3':mode==='itch'?'what’s scuffed?':mode==='stats'?'whose numbers?':mode==='batch'?'which batch?':mode==='find'?'search itches':'pick a command';
+  $('#command-label').textContent=mode==='split'?'drop the whole batch':mode==='chat'?'say it to T3':mode==='itch'?'what’s scuffed?':mode==='find'?'search itches':'pick a command';
   DMIntake.decorate();
   if(mode==='split')$('#input-hint').innerHTML='<kbd>Enter</kbd> preview separate itches';
-  else if(mode==='stats'&&!sources.stats.length)$('#input-hint').textContent=sourceStatus.stats||'Loading saved handles…';
   else $('#input-hint').innerHTML=['itch','chat'].includes(mode)?'<kbd>Tab</kbd> autocomplete <span>·</span> <kbd>Enter</kbd> '+(mode==='chat'?'send':'stash'):'<kbd>↑ ↓</kbd> pick <span>·</span> <kbd>Enter</kbd> run it';
   drawSuggestions();
-  signal(DMIntake.pending?'Finding continuations…':DMIntake.notice|| (mode==='split'?'Separate itches. Preview before saving.':sourceLoading&&['stats','batch'].includes(mode)?'Pulling saved '+(mode==='stats'?'handles and videos.':'batches.'):
-    mode==='chat'?(DMChat.sending?'Sending…':suggestions.length?suggestions.length+' matches · Tab to use one':input.trim()?'Enter sends exactly what you typed.':'Type to message T3.'):mode==='itch'?(suggestions.length?suggestions.length+' matches · Tab to use one':'Type a couple letters for suggestions.'):
-    suggestions.length+' '+(mode==='command'?'commands':'matches')),DMIntake.pending?(state.typing_generator?.configured?'MERCURY':'JEV'):sourceLoading&&['stats','batch'].includes(mode)?'DUMBAPI':DMIntake.source==='mercury'?'MERCURY':mode==='itch'?'LOCAL':'COMMANDS',(DMIntake.pending||sourceLoading&&['stats','batch'].includes(mode))?'load':mode==='itch'?'orbit':'deck');
+  signal(DMIntake.pending?'Finding continuations…':DMIntake.notice|| (mode==='split'?'Separate itches. Preview before saving.':mode==='chat'?(DMChat.sending?'Sending…':suggestions.length?suggestions.length+' matches · Tab to use one':input.trim()?'Enter sends exactly what you typed.':'Type to message T3.'):mode==='itch'?(suggestions.length?suggestions.length+' matches · Tab to use one':'Type a couple letters for suggestions.'):
+    suggestions.length+' '+(mode==='command'?'commands':'matches')),DMIntake.pending?(state.typing_generator?.configured?'MERCURY':'JEV'):DMIntake.source==='mercury'?'MERCURY':mode==='itch'?'LOCAL':'COMMANDS',DMIntake.pending?'load':mode==='itch'?'orbit':'deck');
   $('#command').dataset.rankMs=(performance.now()-started).toFixed(2);
-  if(mode!==lastInputMode){lastInputMode=mode;if(['stats','batch'].includes(mode))loadCommands().then(()=>{if(commandMode()===mode)updateSuggestions();});}
+  if(mode!==lastInputMode){lastInputMode=mode;}
 }
 function suggestionLabel(s){
   if(s.kind==='idea')return s.quality||s.label;
@@ -361,13 +341,13 @@ function suggestionLabel(s){
   return s.label;
 }
 function drawSuggestions(){
-  const mode=commandMode(), pending=DMIntake.pending||(sourceLoading&&['stats','batch'].includes(mode));
+  const mode=commandMode(), pending=DMIntake.pending;
   const visible=(suggestions.length>0||pending)&&document.activeElement===$('#command');
   $('#suggestions').hidden=!visible;$('#command').setAttribute('aria-expanded',String(visible));
   $('#suggestions').setAttribute('aria-busy',String(pending));
   if(suggestionIndex>=0)$('#command').setAttribute('aria-activedescendant','suggestion-'+suggestionIndex);else $('#command').removeAttribute('aria-activedescendant');
   $('#suggestions').innerHTML=`<div class="suggestion-heading" role="presentation">${DMUI.ascii(pending?'load':mode==='command'?'deck':'orbit')}<span>${pending?'LOADING':mode==='command'?'COMMANDS':'SUGGESTIONS'}</span><small>${pending?'…':suggestions.length+' FOUND'}</small></div>`+suggestions.map((s,i)=>`<button id="suggestion-${i}" class="suggestion ${i===suggestionIndex?'selected':''}" data-suggestion="${i}" data-kind="${esc(s.kind||'phrase')}" role="option" aria-selected="${i===suggestionIndex}" tabindex="-1"><small>${esc(s.type)}</small><span>${esc(suggestionLabel(s))}</span><kbd>${i===suggestionIndex?'Enter':'Tab'}</kbd></button>`).join('');
-  if(pending&&!suggestions.length)$('#suggestions').innerHTML+='<div class="suggestion-loading">'+DMUI.ascii('scan')+'<span>'+(DMIntake.pending?'Thinking of useful directions…':'Loading handles, videos and batches…')+'</span></div>';
+  if(pending&&!suggestions.length)$('#suggestions').innerHTML+='<div class="suggestion-loading">'+DMUI.ascii('scan')+'<span>'+(DMIntake.pending?'Thinking of useful directions…':'Finding useful directions…')+'</span></div>';
   DMIntake.renderGhost();
 }
 async function choose(index,run=false){
@@ -377,8 +357,6 @@ async function choose(index,run=false){
   if(mode==='chat-entry'){const text=$('#command').value.slice(6);$('#command').value=text;return DMChat.mode(true);}
   if(mode==='command'){if(s.value==='/share '&&run)return DMSocial.show();if(s.value==='/chat '){$('#command').value='';return DMChat.mode(true);}$('#command').value=s.value;$('#command').focus();updateSuggestions();return;}
   if(mode==='share')return DMSocial.show('',s.value);
-  if(mode==='stats')return lookup(s.value);
-  if(mode==='batch')return batchDetails(s.value);
   if(mode==='find'){setView('inbox');DMItches.open(s.value);$('#command').value='';$('#suggestions').hidden=true;return;}
   if(mode==='open'){const c=state.contexts.find(x=>x.id===s.value);if(c)location.href='t3-thread://v1/'+c.thread_id;}
 }
@@ -389,8 +367,6 @@ async function submit(){
   if(mode==='chat')return DMChat.send(input);
   if(mode==='chat-entry'){$('#command').value=input.slice(6).trim();return DMChat.mode(true);}
   if(mode==='share'){const query=input.slice(6).trim();return DMSocial.show(query,/^[a-f0-9]{32}$/.test(query)?query:'');}
-  if(mode==='stats')return lookup(input.slice(7).trim());
-  if(mode==='batch'){const m=suggestions[0]?.value;if(m)return batchDetails(m);toast('Pick a saved batch, or start a new one.');return;}
   if(mode==='find'){$('#search').value=input.slice(6);setView('inbox');return;}
   if(mode==='open'){if(suggestions.length)return choose(0,true);return toast('No published thread matches.');}
   if(mode==='command'){if(suggestions.length)return choose(0,true);return;}
@@ -498,123 +474,28 @@ function editContext(seed){
     await refresh();toast('Context pinned.');
   });
 }
-function newBatch(){
-  dialog('New AEdits batch',`<p>Starts a saved plan. An agent writes each edit before you render.</p><label for="batch-id">Batch key</label><input id="batch-id" placeholder="gojo-late-night" maxlength="64"><label for="batch-count">How many edits?</label><input id="batch-count" type="number" min="1" max="20" value="5"><label for="batch-request">The vibe</label><textarea id="batch-request" placeholder="Characters, songs, style, anything to avoid…"></textarea><p>Only plans slots. Publishing is separate.</p>`,'Start plan',async()=>{
-    const job=await call('anime.batch.create',{id:$('#batch-id').value,count:Number($('#batch-count').value),request:$('#batch-request').value},uid());
-    toast('Batch plan queued.');setView('tools');await showJob(job.id);
-  });
-}
-async function batchDetails(manifest){
-  $('#suggestions').hidden=true;$('#command').value='';toolTab='batches';setView('tools');
-  const revision=++toolRequests.batches;toolPages.edits=0;toolAnswer('batches',{loading:'Reading the batch…'});
-  try{
-    const data=await call('anime.batch.status',{manifest});
-    if(revision===toolRequests.batches)toolAnswer('batches',{batch:data});
-  }catch(e){if(revision===toolRequests.batches)toolAnswer('batches',{error:e.message});}
-}
-async function renderBatch(manifest){
-  dialog('Start authored edits?',`<p>Queue the authored slots in <b>${esc(manifest)}</b> through AEdits’ canonical pipeline, sequentially.</p><p>Creates new draft outputs. Existing reviewed or published slots are skipped. The GPU will be used; finished outputs still need visual review.</p>`,'Render authored drafts',async()=>{
-    const job=await call('anime.batch.render',{manifest,draft:true,slugs:''},uid());toast('Authored drafts queued.');await showJob(job.id);
-  });
-}
-// View-only tools deck. Domain operations continue through DumbAPI.
-let statsParent=null;
-const toolQueries={};
-const toolRequests={stats:0,batches:0,queue:0};
-function statTiles(metrics,keys){
-  return '<div class="stat-grid">'+keys.map(k=>{const m=metrics[k]||{};return `<div class="stat"><b title="${fmt(m.value)}">${fmt(m.value)}</b><span>${esc(m.label||k.replaceAll('_',' '))}${m.unit?' · '+esc(m.unit):''}</span></div>`;}).join('')+'</div>';
-}
-function statsMarkup(data){
-  if(data.type==='not_captured')return '<h3>No match.</h3><p>'+esc(data.note)+'</p>';
-  if(['choose_account','choose_content'].includes(data.type)){
-    const accounts=data.type==='choose_account',page=paged(accounts?data.accounts:data.items,'matches',5);
-    return '<h3>Which '+(accounts?'account':'item')+'?</h3>'+page.items.map(a=>`<button class="content-row" data-lookup="${esc(accounts?'account:'+a.id:'content:'+a.account_id+':'+a.content_id)}"><b>${esc(a.name||a.title||a.content_id)}</b><small>${esc(a.platform||'')}</small></button>`).join('')+page.nav;
-  }
-  const handle=data.type==='handle',metrics=handle?data.summary.metrics:data.item.metrics;
-  const keys=handle?Object.keys(metrics).filter(k=>metrics[k].value!=null&&metrics[k].basis!=='Latest snapshots'):['views','likes','comments'];
-  let html=`<div class="result-heading"><h3>${esc(handle?data.account.name:data.item.title||data.item.content_id)}</h3>${!handle&&statsParent?'<button class="quiet" data-action="stats-back">← Handle</button>':''}</div>`;
-  if(handle){
-    html+=DMSocial.handleAction(data.account);
-    const totals=data.recorded_totals;
-    if(totals){
-      html+='<p class="scope-label">Captured posts · lifetime counters</p>'+statTiles(totals.metrics,['views','likes','comments']);
-      html+='<p class="coverage-note">'+totals.own_items+' own posts · missing counters excluded'+(totals.partial?' · partial scan':'')+'. Not full-account or period totals.</p>';
-    }
-    if(keys.length){html+='<details class="tool-fold"><summary>Period totals · '+esc(data.summary.start)+' → '+esc(data.summary.end)+'</summary>'+statTiles(metrics,keys)+'</details>';}
-    else html+='<p class="coverage-note">Period totals unavailable.</p>';
-    const snapshots=data.snapshots?.latest_snapshots||[];
-    if(snapshots.length)html+='<details class="tool-fold"><summary>Account snapshots · '+snapshots.map(s=>fmt(s.value)+' '+esc(s.metric.replaceAll('_',' '))).join(' · ')+'</summary>'+snapshots.map(s=>'<p>'+fmt(s.value)+' '+esc(s.metric)+' · '+esc(s.scope)+' · '+esc(s.date)+'<br>'+esc(s.source)+' · '+esc(s.captured_at)+'</p>').join('')+'</details>';
-    const page=paged(data.content?.items||[],'posts');
-    html+='<h4>Posts / videos</h4>'+ (page.items.length?page.items.map(i=>`<button class="content-row" data-lookup="content:${esc(i.account_id)}:${esc(i.content_id)}"><b>${esc(i.title||i.content_id)}</b><small>${['views','likes','comments'].map(k=>k+': '+fmt(i.metrics[k]?.value)).join(' · ')}</small></button>`).join(''):'<p>No captured posts.</p>')+page.nav;
-  }else{
-    html+='<p class="scope-label">Captured content · '+esc(data.item.published_at||'date unavailable')+'</p>'+statTiles(metrics,keys);
-    if(data.item.url&&/^https?:\/\//i.test(data.item.url))html+='<a class="text-link" target="_blank" rel="noopener" href="'+esc(data.item.url)+'">Open source ↗</a>';
-  }
-  return html+'<details class="tool-fold"><summary>Coverage & sources</summary><p>'+esc(data.note)+'</p><pre class="data-detail">'+esc(JSON.stringify(data,null,2))+'</pre></details>';
-}
-async function lookup(target){
-  if(!target)return toast('Pick a handle or paste a video link.');
-  statsParent=toolResults.stats?.stats?.type==='handle'&&target.startsWith('content:')?toolResults.stats:null;
-  $('#suggestions').hidden=true;$('#command').value='';toolTab='stats';setView('tools');
-  const request=++toolRequests.stats;toolPages.posts=0;toolPages.matches=0;
-  toolAnswer('stats',{loading:'Checking stats…'});
-  try{const stats=await call('analytics.lookup',{target});if(request===toolRequests.stats)toolAnswer('stats',{stats});}
-  catch(e){if(request===toolRequests.stats)toolAnswer('stats',{error:e.message});}
-}
+const toolRequests={queue:0};
 function renderTools(){
   if(view!=='tools')return;
-  // Preserve open disclosures, typing, focus and scroll across background refreshes.
+  if(!['inspiration','social'].includes(toolTab))toolTab='inspiration';
   const root=$('#tool-results'),oldTab=root.dataset.tab;
   if(oldTab==='social')DMSocial.capture();
-  const same=oldTab===toolTab,opened=same&&root.result===toolResults[toolTab]?[...root.querySelectorAll('details[open]')].map(n=>n.dataset.fold):[];
+  const same=oldTab===toolTab,opened=same?[...root.querySelectorAll('details[open]')].map(n=>n.dataset.fold):[];
   const focused=root.contains(document.activeElement)?document.activeElement:null,focusKey=focused?.id;
   const caret=focused?.selectionStart,scroll=same?root.querySelector('.tool-panel')?.scrollTop||0:0;
-  const query=root.querySelector('#stats-query');if(query)toolQueries.stats=query.value;
-  $('#feed-count').textContent='[ '+({stats:'NUMBERS',batches:'AEDITS',queue:'QUEUE',social:'SOCIAL',inspiration:'INSPIRATION'})[toolTab]+' ]';
-  let html='<div class="tool-tabs" role="tablist" aria-label="Side quests">'+[['inspiration','Inspiration'],['stats','Stats'],['batches','AEdits'],['social','Social'],['queue','Queue']].map(([key,name])=>`<button type="button" id="tool-tab-${key}" role="tab" data-tool-tab="${key}" aria-selected="${toolTab===key}" aria-controls="tool-panel" tabindex="${toolTab===key?0:-1}">${name}</button>`).join('')+'</div>';
-  let body='';const result=toolResults[toolTab];toolResult=result;
-  if(toolTab==='inspiration'){body=DMInspiration.markup();
-  }else if(toolTab==='social'){body=DMSocial.markup();
-  }else if(toolTab==='stats'){
-    body='<form id="stats-search" class="tool-search"><label class="sr" for="stats-query">Handle, video URL or content ID</label><input id="stats-query" placeholder="Handle or video link…" value="'+esc(toolQueries.stats||'')+'" autocomplete="off"><button class="primary" type="submit">Check ↗</button></form>';
-    if(!result){
-      const page=paged(sources.stats.filter(s=>s.type==='handle'),'handles',6);
-      body+=DMSocial.handlesMarkup();
-      body+='<div class="handle-grid">'+page.items.filter(s=>!DMSocial.isTracked(s)).map(s=>`<button class="content-row" data-lookup="${esc(s.target)}"><b>${esc(s.label)}</b><small>${esc(s.platform)}</small></button>`).join('')+'</div>'+page.nav;
-      if(!page.items.length)body+='<p>'+esc(sourceStatus.stats||'Loading saved handles…')+'</p>';
-    }
-    else body+='<button class="text-link" data-action="tool-home">← Saved handles</button>';
-  }else if(toolTab==='batches'){
-    if(!result){
-      const page=paged(sources.batches,'batches',5);
-      body+='<div class="tool-launch"><div class="tool-intro">'+DMUI.ascii('spark')+'<h3>Batches</h3></div><button class="primary" data-action="new-batch">New batch ↗</button></div>'+page.items.map(b=>`<button class="content-row" data-batch="${esc(b.manifest)}"><b>${esc(b.id)}</b><small>${b.count} edits · ${esc(Object.entries(b.states).map(([s,n])=>n+' '+s).join(' / '))}</small></button>`).join('')+page.nav;
-      if(!page.items.length)body+='<p>'+esc(sourceStatus.batches||'Loading batches…')+'</p>';
-    }else body+='<button class="text-link" data-action="tool-home">← All batches</button>';
-  }else if(!result){
-    const page=paged(jobItems,'jobs',5);
-    body+='<div class="tool-launch"><div class="tool-intro">'+DMUI.ascii('load')+'<h3>Queue</h3></div><button class="secondary" data-action="jobs">Refresh ↻</button></div><div id="jobs-list">'+(page.items.length?page.items.map(j=>`<button class="content-row" data-job="${esc(j.id)}"><b>${esc(j.capability)}</b><small>${esc(j.state)} · ${age(j.created_at)}</small></button>`).join(''):'<p>No jobs yet.</p>')+'</div>'+page.nav;
-  }else body+='<button class="text-link" data-action="tool-home">← All jobs</button>';
-  if(result?.loading)body+='<div class="busy-card" role="status">'+DMUI.ascii('scan','busy-art')+'<div><h3>Loading…</h3><p>'+esc(result.loading)+'</p>'+DMUI.ascii('load')+'</div></div>';
-  if(result?.error)body+='<h3>That didn’t work.</h3><p role="alert">'+esc(result.error)+'</p>';
-  if(result?.stats)body+='<div id="stats-result">'+statsMarkup(result.stats)+'</div>';
-  if(result?.batch){
-    const b=result.batch,page=paged(b.edits,'edits',5);
-    body+='<h3>'+esc(b.id)+'</h3><p>'+b.total+' edits · '+esc(b.scope)+'</p>'+page.items.map(e=>`<div class="content-row"><b>${esc(e.slug||'Slot '+e.slot)}</b><small>${esc(e.state)} · master ${esc(e.master)} · ${esc(e.next_action||'')}${e.changed_tracked_files.length?' · INPUTS CHANGED':''}</small></div>`).join('')+page.nav+`<div class="detail-actions"><button class="primary" data-render-batch="${esc(b.manifest)}">Render authored drafts</button></div><details class="tool-fold"><summary>Batch notes</summary><p>${esc(b.note)}</p></details>`;
-  }
-  if(result?.job){
-    const j=result.job;
-    body+=`<h3>${esc(j.capability)}</h3><p>${esc(j.state)}${j.queue_position?' · queue #'+j.queue_position:''}${j.elapsed_seconds!=null?' · '+j.elapsed_seconds+'s':''}</p>${j.error?'<p role="alert">'+esc(j.error)+'</p>':''}${j.result?.note?'<p>'+esc(j.result.note)+'</p>':''}${j.result?.brief?'<details class="tool-fold"><summary>T3 brief</summary><textarea id="job-brief" readonly>'+esc(j.result.brief)+'</textarea><button class="secondary" data-action="copy-job">Copy for T3</button></details>':''}<details class="tool-fold"><summary>Job log</summary><code>${esc(j.log_path)}</code><pre class="data-detail">${esc(j.log_tail||'No log yet.')}</pre></details><div class="detail-actions"><button class="secondary" data-job="${esc(j.id)}">Refresh job</button>${j.can_cancel?'<button class="secondary" data-cancel-job="'+esc(j.id)+'">Cancel queued job</button>':''}</div>`;
-  }
+  $('#feed-count').textContent='[ '+(toolTab==='social'?'SOCIAL':'INSPIRATION')+' ]';
+  const tabs=[['inspiration','Inspiration'],['social','Social']];
+  const html='<div class="tool-tabs" role="tablist" aria-label="Side quests">'+tabs.map(([key,name])=>`<button type="button" id="tool-tab-${key}" role="tab" data-tool-tab="${key}" aria-selected="${toolTab===key}" aria-controls="tool-panel" tabindex="${toolTab===key?0:-1}">${name}</button>`).join('')+'</div>';
+  const body=toolTab==='social'?DMSocial.markup():DMInspiration.markup();
   root.innerHTML=html+`<section id="tool-panel" class="tool-panel tool-card" role="tabpanel" aria-labelledby="tool-tab-${toolTab}" tabindex="0">${body}</section>`;
-  root.dataset.tab=toolTab;
-  root.result=result;
+  root.dataset.tab=toolTab;root.result=toolResults[toolTab];
   root.querySelectorAll('details').forEach((n,i)=>{n.dataset.fold=String(i);n.open=opened.includes(String(i));});
-  if(toolTab==='social')DMSocial.mounted();
-  if(toolTab==='inspiration')DMInspiration.mounted();
+  if(toolTab==='social')DMSocial.mounted();else DMInspiration.mounted();
   if(same)root.querySelector('.tool-panel').scrollTop=scroll;
   if(focusKey){const replacement=document.getElementById(focusKey);replacement?.focus({preventScroll:true});if(caret!=null&&replacement?.setSelectionRange)replacement.setSelectionRange(caret,caret);}
   DMUI.sync();
 }
+
 async function jobs(){
   try{const data=await post('/api/jobs',{});jobItems=data.items;if(view==='tools'&&toolTab==='queue'&&!toolResults.queue)renderTools();}
   catch(e){toast(e.message);}
@@ -705,10 +586,8 @@ async function frameboard(){
 }
 async function action(name){
   if(name==='tool-home'){++toolRequests[toolTab];toolResults[toolTab]=null;toolResult=null;renderTools();if(toolTab==='queue')jobs();return;}
-  if(name==='stats-back'){toolAnswer('stats',statsParent);return;}
   const r=state.itches.find(x=>x.id===selected);
   if(name==='connect-t3'){const b=$('#connect-t3');if(b?.disabled)return;if(b){b.disabled=true;b.innerHTML=DMUI.ascii('load')+' Connecting…';}try{toast((await call('t3.connect')).note);}finally{if(b?.isConnected){b.disabled=false;b.textContent='Reconnect local T3';}}return;}
-  if(name==='new-batch')return newBatch();
   if(name==='chat-mode'){if(view!=='now')setView('now');return DMChat.mode(true);}
   if(name==='context')return editContext();
   if(name==='back-to-work')return setView(workspaceView);
@@ -752,9 +631,6 @@ document.addEventListener('click',async e=>{
     if(target.dataset.itch)return DMItches.open(target.dataset.itch);
     if(target.dataset.filter){feedPage=0;filter=target.dataset.filter;document.querySelectorAll('[data-filter]').forEach(b=>b.classList.toggle('active',b.dataset.filter===filter));render();return;}
     if(target.dataset.suggestion!==undefined)return await choose(Number(target.dataset.suggestion),true);
-    if(target.dataset.lookup)return await lookup(target.dataset.lookup);
-    if(target.dataset.batch)return await batchDetails(target.dataset.batch);
-    if(target.dataset.renderBatch)return renderBatch(target.dataset.renderBatch);
     if(target.dataset.job)return await showJob(target.dataset.job);
     if(target.dataset.cancelJob){await call('jobs.cancel',{id:target.dataset.cancelJob});return showJob(target.dataset.cancelJob);}
     if(target.dataset.action)return await action(target.dataset.action);
@@ -774,8 +650,7 @@ $('#command').addEventListener('keydown',async e=>{
 $('#stash').onclick=()=>submit().catch(e=>toast(e.message));
 $('#moment').onclick=()=>capture(true);
 $('#search').oninput=()=>{feedPage=0;render();};
-document.addEventListener('submit',e=>{if(e.target.id==='stats-search'){e.preventDefault();lookup($('#stats-query').value.trim()).catch(e=>toast(e.message));}});
-document.addEventListener('keydown',e=>{if(e.target.matches('[data-tool-tab]')&&['ArrowLeft','ArrowRight','Home','End'].includes(e.key)){e.preventDefault();const tabs=['inspiration','stats','batches','social','queue'],i=tabs.indexOf(toolTab);selectTool(tabs[e.key==='Home'?0:e.key==='End'?tabs.length-1:(i+(e.key==='ArrowRight'?1:tabs.length-1))%tabs.length]);$('#tool-tab-'+toolTab).focus();}});
+document.addEventListener('keydown',e=>{if(e.target.matches('[data-tool-tab]')&&['ArrowLeft','ArrowRight','Home','End'].includes(e.key)){e.preventDefault();const tabs=['inspiration','social'],i=tabs.indexOf(toolTab);selectTool(tabs[e.key==='Home'?0:e.key==='End'?tabs.length-1:(i+(e.key==='ArrowRight'?1:tabs.length-1))%tabs.length]);$('#tool-tab-'+toolTab).focus();}});
 $('#project').onchange=async()=>{project=$('#project').value;feedPage=0;await call('manager.context.select',{id:''});state.active_context='';renderContext();render();updateSuggestions();};
 $('#context').onchange=async()=>{
   const id=$('#context').value;
