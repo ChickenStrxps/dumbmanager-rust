@@ -1,0 +1,38 @@
+[
+  {
+    "package": "jni@0.22.4",
+    "source": "https://raw.githubusercontent.com/jni-rs/jni-rs/5ae9458a4ec44c5318f37ddc7569c1d4ae8a69e7/LICENSE-MIT",
+    "packaged_commit": "5ae9458a4ec44c5318f37ddc7569c1d4ae8a69e7",
+    "sha256": "fea1d5bf3dd71605ce5d7d2ff695c1837e914c77195e523a86b5391716477960",
+    "selected_license": "MIT"
+  },
+  {
+    "package": "jni-macros@0.22.4",
+    "source": "https://raw.githubusercontent.com/jni-rs/jni-rs/33045a124105c939d1e2cbdcb5a39e5d868ffa03/LICENSE-MIT",
+    "packaged_commit": "33045a124105c939d1e2cbdcb5a39e5d868ffa03",
+    "sha256": "fea1d5bf3dd71605ce5d7d2ff695c1837e914c77195e523a86b5391716477960",
+    "selected_license": "MIT"
+  },
+  {
+    "package": "objc2-osa-kit@0.3.2",
+    "source": "licenses/upstream/objc2/LICENSE-MIT.txt",
+    "packaged_commit": "7b1abfd750a2cacaea71d6a56ecfb83cb7de560b",
+    "sha256": "f6a2e783669a0dd7a2c3b8a4f76db40ae49033e66e1bdc30f3aa25fe5577b070",
+    "selected_license": "MIT",
+    "note": "Reuse the full upstream objc2 MIT text already documented in provenance.json; the exact packaged commit omits full MIT text."
+  },
+  {
+    "package": "rustls-platform-verifier-android@0.2.0",
+    "source": "https://raw.githubusercontent.com/rustls/rustls-platform-verifier/252e25161a91af476cbea620e29d277592d27ec7/LICENSE-MIT",
+    "packaged_commit": "252e25161a91af476cbea620e29d277592d27ec7",
+    "sha256": "1c7cf76689c837a68ed8d704994e52a0f2940c087958f860d17f3186afbdcc0c",
+    "selected_license": "MIT"
+  },
+  {
+    "package": "tauri-plugin@2.7.2",
+    "source": "https://raw.githubusercontent.com/tauri-apps/tauri/59b63ab500da9859f12d8888c3298bc29bba0b92/LICENSE-MIT",
+    "packaged_commit": "59b63ab500da9859f12d8888c3298bc29bba0b92",
+    "sha256": "9dd42ea92cff2ede5cd477cbfcce051b2d0115c0ac7f368ee88cb545055dff1d",
+    "selected_license": "MIT"
+  }
+]

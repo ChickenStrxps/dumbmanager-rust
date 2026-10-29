@@ -24,10 +24,11 @@ evidence, or a concrete access requirement that prevents verification.
   video: nine timestamped panels, 1464x834 JPEG, exact original bytes retained and
   temporary files cleaned. Windows GIF clipboard handoff/paste is unverified;
   it was not tested while the owner was using the desktop/clipboard.
-- [ ] RUST-05 - Configured boundaries passed local fixtures. Live provider keys,
-  microphone/audio, Discord delivery, real T3 and a physical phone/proxy remain
-  unavailable for verification. No credentials are borrowed from other installs.
-  These are preview limitations, not claims of tested live connectivity.
+- [ ] RUST-05 - Live Mercury and Jev connection tests, read-only T3 thread
+  discovery and Discord bot/application authentication passed with this edition's
+  saved configuration. Microphone/audio, Discord delivery, T3 sends and a physical
+  phone/proxy remain unverified. No credentials are borrowed from other installs.
+  Authentication and reads do not establish end-to-end delivery.
 - [x] RUST-06 - Optimized Windows app, MCP console and NSIS installer built.
   The app and installer embed all nine approved icon sizes byte-for-byte. The
   generated installer manifest includes the two production binaries and license
@@ -39,9 +40,10 @@ evidence, or a concrete access requirement that prevents verification.
   valid kept boards, explicit deletion and expiration recovery. No full security
   audit or complete 1:1 runtime parity is implied. Strict Clippy and format/syntax
   checks passed; the final optimized build is a separate RUST-06 gate.
-- [ ] RUST-08 - The owner approved the actual hidden-native WebView stills.
-  Complete the private-repository PR workflow after applicable CI passes.
-  Publishing a release remains separately authorized.
+- [x] RUST-08 - The owner approved the restored hidden-native WebView stills;
+  the original interface PR is merged. The owner authorized publication and a
+  release. Final public cleanup and signed-updater changes use a separate reviewed
+  PR with applicable CI. Installer upgrade testing is deferred for this preview.
 
 Recently closed implementation gaps: original public inspiration adapters and
 evidence-linked Learning topic guides. Learning passed twelve external fixture

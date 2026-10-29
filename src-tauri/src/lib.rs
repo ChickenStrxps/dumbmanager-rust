@@ -15,6 +15,7 @@ mod preview;
 pub mod services;
 mod state;
 mod tray;
+mod updater;
 pub mod window;
 
 use std::error::Error;
@@ -85,6 +86,8 @@ where
     }));
 
     let app = builder
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(updater::UpdateState::default())
         .register_uri_scheme_protocol("dm-preview", |context, request| {
             let html = (request.method() == tauri::http::Method::GET
                 && context.webview_label() == MAIN_WINDOW)
@@ -120,6 +123,8 @@ where
             commands::open_export_folder,
             commands::choose_path,
             commands::legacy_api,
+            updater::update_check,
+            updater::update_install,
         ])
         .setup(move |app| {
             // Tauri panics on setup errors; show a readable reason instead.

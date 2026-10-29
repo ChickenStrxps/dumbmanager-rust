@@ -3,7 +3,7 @@
 This is an isolated Rust/Tauri Windows application. Do not change the existing
 DumbManager or DumbAPI installation, source, data, credentials, runtime records,
 launch shortcuts, or GitHub repository. Reuse frontend source and original artwork
-for the authorized 1:1 port; never copy runtime state or keys. This repo stays private.
+for the authorized 1:1 port; never copy runtime state or keys. The owner authorizes this repository and release packages to be public. Never include private runtime state or credentials.
 
 Use `io.dumbmanager.rust` as the application identifier and `DumbManager Rust` as
 the visible name. Store data under the Tauri application data directory, never
