@@ -47,6 +47,8 @@ def main():
     installer = Path(sys.argv[2])
     if not installer.is_file() or not installer.name.endswith('-setup.exe'):
         raise ValueError('expected the NSIS setup executable')
+    if not re.fullmatch(r'[A-Za-z0-9._-]+', installer.name):
+        raise ValueError('installer asset name must use only ASCII letters, digits, dots, underscores and hyphens')
     signature = Path(str(installer) + '.sig').read_text(encoding='utf-8').strip()
     raw, lines = decode_record(signature, 74)
     if raw[2:10] != key[2:10]:

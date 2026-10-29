@@ -66,7 +66,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Signed bundle failed.' }
           $installers = @(Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe)
           if ($installers.Count -ne 1) { throw 'Expected exactly one NSIS installer.' }
-          python tools/release_manifest.py manifest $installers[0].FullName
+          $installer = $installers[0].FullName
+          $safeInstaller = Join-Path $installers[0].DirectoryName $installers[0].Name.Replace(' ', '-')
+          if ($installer -ne $safeInstaller) {
+            Move-Item -LiteralPath $installer -Destination $safeInstaller
+            Move-Item -LiteralPath "$installer.sig" -Destination "$safeInstaller.sig"
+          }
+          python tools/release_manifest.py manifest $safeInstaller
           if ($LASTEXITCODE -ne 0) { throw 'Manifest validation failed.' }
           New-Item -ItemType Directory -Force artifacts | Out-Null
           git archive --format=zip --output=artifacts/DumbManager-Rust-source.zip $env:GITHUB_SHA
