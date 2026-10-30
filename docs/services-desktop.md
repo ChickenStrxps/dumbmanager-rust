@@ -51,3 +51,17 @@ ordinary manifest temp files under the storage lock. The valid index and kept
 frames remain intact. A cursor-free storage fixture checked this recovery,
 explicit deletion and expiration cleanup; failed temp writes also remove their
 partial output.
+
+Global shortcuts remain opt-in for each app session. Settings shows the actual
+Windows-assigned keys, including any conflict fallback. Test mode records detected
+keys for 15 seconds without performing actions. Keep the app running.
+
+Stash opens the existing small editor dialog and saves on Enter; its text and
+receipts are separate from the main stash draft. Mark the moment saves its
+bookmark immediately, then opens an optional note editor; closing that editor
+keeps the bookmark. An open editor or itch popup is preserved rather than replaced.
+Quick panel opens the main stash composer. Let it cook focuses the selected itch's
+Send control for review; it does not dispatch automatically. Snip leaves the
+foreground application in place while selecting a region, then brings the saved
+local receipt back into DumbManager. Cancelling a snip creates no receipt and
+does not bring the main window forward.

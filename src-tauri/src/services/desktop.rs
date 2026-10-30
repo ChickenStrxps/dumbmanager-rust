@@ -87,6 +87,7 @@ fn capture_region(state: &AppState, p: &Value) -> LegacyResult<Value> {
         }
     }
     result["snip"] = snip;
+    shortcuts::reveal();
     Ok(result)
 }
 fn replay_api(state: &AppState, p: &Value) -> LegacyResult<Value> {

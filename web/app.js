@@ -372,15 +372,16 @@ async function submit(){
   if(mode==='command'){if(suggestions.length)return choose(0,true);return;}
   if(input||DMUploads.itchAttachments.length)await capture(false);
 }
-async function capture(moment){
+async function capture(moment,quickTitle){
   if(saving)return;
-  if(!moment&&DMUploads.busy)return toast('Receipts still uploading. Give it a sec.');
-  const attachments=moment?[]:DMUploads.itchAttachments;
-  const title=moment?'':$('#command').value.trim();if(!title&&!moment&&!attachments.length)return;
+  const quick=typeof quickTitle==='string',draft=!moment&&!quick;
+  if(draft&&DMUploads.busy)return toast('Receipts still uploading. Give it a sec.');
+  const attachments=draft?DMUploads.itchAttachments:[];
+  const title=moment?'':quick?quickTitle.trim():$('#command').value.trim();if(!title&&!moment&&!attachments.length)return;
   if(title.length>500)return toast('Keep it under 500 characters. Add details after.');
-  const args={title,moment,attachments:JSON.stringify(attachments.map(a=>a.id)),project,context_id:context()?.id||'',context_snapshot:JSON.stringify(context()||{}),use_active:false,event_at:new Date().toISOString(),request_key:replayCaptureKey||uid()};
+  const args={title,moment,attachments:JSON.stringify(attachments.map(a=>a.id)),project,context_id:context()?.id||'',context_snapshot:JSON.stringify(context()||{}),use_active:false,event_at:new Date().toISOString(),request_key:quick?uid():replayCaptureKey||uid()};
   saving=true;$('#stash').disabled=true;DMUploads.render();
-  if(!moment){$('#command').value='';updateSuggestions();}
+  if(draft){$('#command').value='';updateSuggestions();}
   try{
     let row;
     try {
@@ -395,10 +396,24 @@ async function capture(moment){
       if(outbox.length>=32)throw new Error('App outbox is full. Restore native storage before saving more.');
       outbox.push(args);stashOutbox();toast('Queued in this app · syncs when native storage is available');
     }
-    if(!moment)DMUploads.commit('@itch',attachments);
-    if(row){merge(row);selected=row.id;render();window.DMAquarium?.celebrate?.('stash',$('#stash'));toast(moment?'THAT. Moment saved.':'Stashed. Back to it.',()=>change(row.id,{state:'archived'}));}
-  }catch(e){if(!moment&&!$('#command').value){$('#command').value=title;updateSuggestions();}toast(e.message);}
-  finally{replayCaptureKey='';saving=false;DMUploads.render();updateSuggestions();}
+    if(draft)DMUploads.commit('@itch',attachments);
+    if(row){merge(row);if(!$('#itch-view').open)selected=row.id;render();window.DMAquarium?.celebrate?.('stash',$('#stash'));toast(moment?'THAT. Moment saved.':'Stashed. Back to it.',()=>change(row.id,{state:'archived'}));}
+    return row||{queued:true};
+  }catch(e){if(draft&&!$('#command').value){$('#command').value=title;updateSuggestions();}toast(e.message);}
+  finally{if(!quick)replayCaptureKey='';saving=false;DMUploads.render();updateSuggestions();}
+}
+async function quickCapture(moment=false){
+  if($('#editor').open||$('#itch-view').open||saving)return toast('Finish the open action first.');
+  const row=moment?await capture(true):null;
+  if(moment&&!row?.id)return;
+  if($('#editor').open||$('#itch-view').open)return toast('Moment saved. Open it from the itch pile to add a note.');
+  dialog(moment?'Moment saved. Add a note?':'Stash an itch',`<p>${moment?'The bookmark is already saved. Add a few words, or close to keep it as is.':'Describe what happened. Your existing stash draft stays separate.'}</p><label for="quick-capture-note">${moment?'What happened?':'What’s scuffed?'}</label><input id="quick-capture-note" maxlength="500" autocomplete="off" placeholder="a few words…">`,moment?'Save note':'Stash it',async()=>{
+    const title=$('#quick-capture-note').value.trim();
+    if(!title)return false;
+    if(moment){await change(row.id,{title},row.version);toast('Moment note saved.');}
+    else if(!await capture(false,title))return false;
+  });
+  $('#quick-capture-note').focus();
 }
 function planMarkup(row){
   if(!row.plan.length)return '<p>No plan yet. Send it to T3 to get one.</p>';
@@ -545,7 +560,7 @@ function renderShortcuts(){
   const expanded=root.querySelector('details')?.open,focused=root.contains(document.activeElement)?document.activeElement.dataset.action:null;
   const running=nativeState.running,test=nativeState.test_remaining||0,hits=nativeState.test_hits||[],key=id=>nativeState.bindings?.[id],names={1:'Stash an itch',2:'Mark the moment',3:'Quick panel',4:'Let it cook',5:'Snip evidence'};
   const row=(id,description)=>`<div class="shortcut-row"><div><strong>${names[id]}</strong><span>${description}</span></div><div class="shortcut-key"><kbd>${esc(key(id)||'Not available')}</kbd>${hits.includes(id)?'<small>✓ Detected</small>':''}</div></div>`;
-  root.innerHTML=`<div class="shortcut-heading"><h3>Global shortcuts</h3><span class="key ${running?'amber':''}">${running?'[ + ] Helper connected':'[ — ] Off'}</span></div><p>Catch it. Note it. Snip it. From any app.</p>${row(1,'Opens a small box. Describe it, then Enter to save.')}${row(2,'Saves the moment, then opens a quick note popup.')}${row(5,'Drag a box. Adds a receipt to the open itch or a new draft.')}${row(4,'Sends the open itch + evidence to its chosen T3 thread. Open its popup first.')}<div class="detail-actions"><button class="${running?'secondary':'primary'}" data-action="native-start" ${nativeBusy?'disabled':''}>${nativeBusy?'Connecting…':running?'Refresh status':'Fix / enable keys'}</button><button class="primary" data-action="native-test" ${nativeBusy||test?'disabled':''}>${test?'Listening… '+test+'s':'Test shortcuts'}</button></div><p class="shortcut-check" role="status" aria-live="polite">${test?DMUI.ascii('scan')+' Switch to another app and press a shortcut. Nothing is saved during this '+test+'s check.':hits.length?'Detected: '+hits.map(id=>names[id]).join(', ')+'. Press again to use normally.':nativeState.note?esc(nativeState.note):'Start a check, then press the keys from any app. The results appear here.'}</p>${nativeState.shortcut_conflicts?.length?'<p class="amber">Some keys are busy: '+esc(nativeState.shortcut_conflicts.join(', '))+'. Other available shortcuts still work.</p>':''}<details><summary>More shortcuts & help</summary>${row(3,'Opens capture with your recent itches.')}<p><kbd>Ctrl K</kbd> Jump to the chat/stash line · this page only.</p><p>The displayed keys are the ones Windows assigned. If a key is busy, a backup combination is shown. Keep DumbManager running.</p><button class="secondary" data-action="context">Change testing context</button></details>`;
+  root.innerHTML=`<div class="shortcut-heading"><h3>Global shortcuts</h3><span class="key ${running?'amber':''}">${running?'[ + ] Helper connected':'[ — ] Off'}</span></div><p>Catch it. Note it. Snip it. From any app.</p>${row(1,'Opens a small box. Describe it, then Enter to save.')}${row(2,'Saves the moment, then opens a quick note popup.')}${row(5,'Drag a box. Adds a receipt to the open itch or a new draft.')}${row(4,'Focuses Send in the open itch. Review its thread and evidence, then send.')}<div class="detail-actions"><button class="${running?'secondary':'primary'}" data-action="native-start" ${nativeBusy?'disabled':''}>${nativeBusy?'Connecting…':running?'Refresh status':'Fix / enable keys'}</button><button class="primary" data-action="native-test" ${nativeBusy||test?'disabled':''}>${test?'Listening… '+test+'s':'Test shortcuts'}</button></div><p class="shortcut-check" role="status" aria-live="polite">${test?DMUI.ascii('scan')+' Switch to another app and press a shortcut. Nothing is saved during this '+test+'s check.':hits.length?'Detected: '+hits.map(id=>names[id]).join(', ')+'. Press again to use normally.':nativeState.note?esc(nativeState.note):'Start a check, then press the keys from any app. The results appear here.'}</p>${nativeState.shortcut_conflicts?.length?'<p class="amber">Some keys are busy: '+esc(nativeState.shortcut_conflicts.join(', '))+'. Other available shortcuts still work.</p>':''}<details><summary>More shortcuts & help</summary>${row(3,'Opens capture with your recent itches.')}<p><kbd>Ctrl K</kbd> Jump to the chat/stash line · this page only.</p><p>The displayed keys are the ones Windows assigned. If a key is busy, a backup combination is shown. Keep DumbManager running.</p><button class="secondary" data-action="context">Change testing context</button></details>`;
   if(expanded)root.querySelector('details').open=true;
   if(focused)root.querySelector('[data-action="'+focused+'"]')?.focus({preventScroll:true});
   DMUI.sync();

@@ -43,9 +43,17 @@ fn pressed(id: u32) {
     let real = hit(&mut state().lock().unwrap_or_else(|e| e.into_inner()), id);
     if real {
         if let Some(app) = APP.get() {
-            crate::window::reveal(app);
+            // Keep the foreground app in place for the snipping overlay.
+            if id != 5 {
+                crate::window::reveal(app);
+            }
             let _ = app.emit("desktop-shortcut", id);
         }
+    }
+}
+pub(super) fn reveal() {
+    if let Some(app) = APP.get() {
+        crate::window::reveal(app);
     }
 }
 pub fn status() -> Value {

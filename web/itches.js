@@ -31,7 +31,7 @@ window.DMItches=(()=>{
     const current=generation;post('/api/native',{action:'status'}).then(value=>{
       if(current!==generation)return;const key=value.running&&value.bindings?.['4'];
       $('#itch-shortcut').textContent=key||'';
-      $('#itch-shortcut').title=key?'Sends this itch to the thread above.':'Turn on global keys in Settings → Shortcuts.';
+      $('#itch-shortcut').title=key?'Focuses Send. Review this itch and its thread before sending.':'Turn on global keys in Settings → Shortcuts.';
     }).catch(()=>{});
     prepare();
   }
