@@ -40,6 +40,8 @@ jobs:
             node --check $_.FullName
             if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax check failed" }
           }
+      - name: Check shortcut behavior
+        run: node --test tests/native-shortcuts.test.cjs
       - name: Check Rust warnings
         run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --lib --bins -- -D warnings
       - name: Check Rust formatting

@@ -32,6 +32,7 @@
     if (typeof listen !== 'function') return;
     await listen('desktop-shortcut', ({payload:id}) => {
       if (id === 5) { snip(document.querySelector('#itch-view')?.open ? selected : ''); return; }
+      if (id === 1 || id === 2) { quickCapture(id === 2).catch(error => toast(error.message)); return; }
       if (id === 4) {
         const dialog = document.querySelector('#itch-view');
         if (!dialog?.open) { if (typeof toast === 'function') toast('Open an itch and choose its thread first.'); return; }
@@ -40,11 +41,10 @@
         if (typeof toast === 'function') toast('Review the selected itch and thread, then use Send.');
         return;
       }
-      if (document.querySelector('#itch-view')?.open) { if (typeof toast === 'function') toast('Finish the open itch first.'); return; }
+      if (document.querySelector('#itch-view')?.open || document.querySelector('#editor')?.open) { if (typeof toast === 'function') toast('Finish the open action first.'); return; }
       if (typeof setView === 'function') setView('now');
       document.querySelector('#mode-itch')?.click();
-      if (id === 2) document.querySelector('#moment')?.click();
-      else document.querySelector('#command')?.focus();
+      document.querySelector('#command')?.focus();
     });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { install().catch(() => {}); }, {once:true});
