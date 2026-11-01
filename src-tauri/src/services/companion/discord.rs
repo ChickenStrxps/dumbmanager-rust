@@ -1,5 +1,6 @@
 //! Signed Discord intake. The ledger and drafts contain no interaction tokens.
 mod followups;
+mod inspect;
 mod repro;
 mod workflows;
 use super::*;
@@ -426,6 +427,36 @@ pub(super) fn receive(
         return Err(denied());
     }
     let data = &v["data"];
+    // Pure, private inspection bypasses the durable draft and replay ledger.
+    if v["type"] == 2 && ["dbinspect", "Inspect characters"].contains(&val(data, "name")) {
+        let input = if data["name"] == "dbinspect" && data["type"] == 1 {
+            data["options"]
+                .as_array()
+                .filter(|o| o.len() == 1)
+                .and_then(|o| o.first())
+                .filter(|o| o["name"] == "text")
+                .and_then(|o| o["value"].as_str())
+        } else if data["name"] == "Inspect characters" && data["type"] == 3 {
+            let target = val(data, "target_id");
+            let message = &data["resolved"]["messages"][target];
+            if snow(target) && val(message, "id") == target {
+                message["content"].as_str()
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        let result = input.ok_or_else(|| LegacyError::invalid("Discord did not supply text to inspect. Use /dbinspect text: to supply it explicitly; attachments are not read."))
+            .and_then(inspect::inspect);
+        let response = match result {
+            Ok(response) => response,
+            Err(error) => {
+                json!({"type":4,"data":{"flags":64,"content":error.error,"allowed_mentions":{"parse":[]}}})
+            }
+        };
+        return Ok((response, None));
+    }
     let inbox = v["type"] == 2
         && data["name"] == "dumbbridge"
         && data["options"]
