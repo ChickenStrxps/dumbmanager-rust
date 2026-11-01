@@ -67,9 +67,20 @@ pub(crate) fn create_named(
     webview_data_dir: PathBuf,
     name: &str,
 ) -> tauri::Result<()> {
+    create_named_with_visibility(app, webview_data_dir, name, true)
+}
+
+pub(crate) fn create_named_with_visibility(
+    app: &AppHandle,
+    webview_data_dir: PathBuf,
+    name: &str,
+    visible: bool,
+) -> tauri::Result<()> {
     let policy = NavigationPolicy::new(app.config().build.dev_url.clone());
     WebviewWindowBuilder::new(app, MAIN_WINDOW, WebviewUrl::App("index.html".into()))
         .title(name)
+        .visible(visible)
+        .focused(visible)
         .inner_size(1280.0, 820.0)
         .min_inner_size(880.0, 600.0)
         .center()

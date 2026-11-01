@@ -57,15 +57,40 @@ pub fn run_mcp() -> Result<(), Box<dyn Error>> {
 }
 
 pub fn run() {
-    if std::env::args_os().nth(1).is_some() {
+    let args: Vec<_> = std::env::args_os().skip(1).collect();
+    let discord_listener = args.len() == 1 && args[0] == "--discord-listener";
+    if !args.is_empty() && !discord_listener {
         fail(
-            "The desktop executable does not accept command-line arguments or data-directory overrides.",
+            "Usage: dumbmanager-rust [--discord-listener]. Data-directory overrides are not supported.",
         );
     }
     // Before any window exists, so the taskbar uses this app's own identity.
     platform::set_app_user_model_id(APP_ID);
 
-    run_desktop(app_context(), APP_NAME, start);
+    run_desktop(app_context(), APP_NAME, move |app| {
+        start(app, !discord_listener)?;
+        if discord_listener {
+            start_discord_listener(app)?;
+        }
+        Ok(())
+    });
+}
+
+/// Explicit local launch only; uses this installation's existing configuration.
+fn start_discord_listener(app: &AppHandle) -> Result<(), Box<dyn Error>> {
+    let state = app.state::<AppState>();
+    let status = state.legacy_api(
+        "/api/call",
+        &serde_json::json!({"name":"bridge.status","args":{}}),
+    )?;
+    if status["enabled"] != true || status["configured"] != true {
+        return Err("Configure and enable Discord in this installation's Settings before starting its listener.".into());
+    }
+    state.legacy_api(
+        "/api/call",
+        &serde_json::json!({"name":"companion.start","args":{}}),
+    )?;
+    Ok(())
 }
 
 fn app_context() -> tauri::Context<tauri::Wry> {
@@ -81,8 +106,14 @@ where
     // Must be the first plugin: a second launch focuses the running window
     // instead of opening the same database from two processes.
     #[cfg(desktop)]
-    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-        window::reveal(app);
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+        if args.len() == 2 && args[1] == "--discord-listener" {
+            if let Err(error) = start_discord_listener(app) {
+                platform::show_error(APP_NAME, &error.to_string());
+            }
+        } else {
+            window::reveal(app);
+        }
     }));
 
     let app = builder
@@ -150,7 +181,7 @@ where
 }
 
 /// Opens this app's own data, then creates the window and tray icon.
-fn start(app: &AppHandle) -> Result<(), Box<dyn Error>> {
+fn start(app: &AppHandle, visible: bool) -> Result<(), Box<dyn Error>> {
     let identifier = &app.config().identifier;
     if identifier != APP_ID {
         return Err(format!(
@@ -161,7 +192,7 @@ fn start(app: &AppHandle) -> Result<(), Box<dyn Error>> {
     let data_dir = app.path().app_data_dir()?;
     let webview_dir = app.path().app_local_data_dir()?.join("webview");
 
-    start_at(app, &data_dir, webview_dir, APP_NAME)
+    start_at(app, &data_dir, webview_dir, APP_NAME, visible)
 }
 
 /// Private startup wiring. No caller-supplied data path reaches this function
@@ -171,6 +202,7 @@ fn start_at(
     data_dir: &Path,
     webview_dir: PathBuf,
     name: &str,
+    visible: bool,
 ) -> Result<(), Box<dyn Error>> {
     let opened = AppPaths::new(data_dir).and_then(|paths| {
         let store = Store::open(&paths.database_path())?;
@@ -180,7 +212,7 @@ fn start_at(
         opened.map_err(|error| format!("{error}\n\nData folder: {}", data_dir.display()))?;
 
     app.manage(AppState::new(paths, store, card::renderer()));
-    window::create_named(app, webview_dir, name)?;
+    window::create_named_with_visibility(app, webview_dir, name, visible)?;
     #[cfg(windows)]
     if let Some(window) = app.get_webview_window(MAIN_WINDOW) {
         if let Ok(hwnd) = window.hwnd() {
