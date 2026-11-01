@@ -53,8 +53,9 @@ pub(super) fn panel(row: &Value, kind: u8) -> Value {
         {"type":1,"components":[button(row,"help","Structure with Mercury",blocked||stashed),button(row,"adopt","Adopt proposal",blocked||stashed||!row["proposal"].is_object()),button(row,"related","Related with Jev",blocked),button(row,"research","Research with Jev",blocked||!stashed),button(row,if row["research"]["report"].is_object(){"readresearch"}else{"readproposal"},if row["research"]["report"].is_object(){"Read research"}else{"Read proposal"},blocked||(!row["proposal"].is_object()&&!row["research"]["report"].is_object()))]},
         {"type":1,"components":[button(row,"preview","Preview T3 send",blocked||!stashed||val(row,"thread_id").is_empty()||row["frozen"].is_object()),button(row,"confirm",if row["frozen"]["status"]=="unconfirmed"{"Recover same send"}else{"Confirm T3 send"},blocked||!row["frozen"].is_object()||row["frozen"]["status"]=="confirmed"),button(row,"card","ASCII card",blocked),button(row,"cancelpreview","Cancel preview",blocked||row["frozen"]["status"]!="previewed"),button(row,"readpreview","Read preview",blocked||!row["frozen"].is_object())]}
     ]);
+    content.insert_str(0, "Save follow-up opens an editable snapshot (first 1000 UTF-16 units) and note; submitting stores them locally with the source IDs. Attachments are omitted. Review text and URLs for private information before saving.\n\n");
     let mut components = components;
-    components.as_array_mut().unwrap().push(json!({"type":1,"components":[button(row,"reproedit","Edit repro brief",blocked),button(row,"reprosource",if row["repro"]["include_source"] == true {"Omit source"} else {"Include source"},blocked),button(row,"reprofile","Preview / export .md",blocked)]}));
+    components.as_array_mut().unwrap().push(json!({"type":1,"components":[button(row,"reproedit","Edit repro brief",blocked),button(row,"reprosource",if row["repro"]["include_source"] == true {"Omit source"} else {"Include source"},blocked),button(row,"reprofile","Preview / export .md",blocked),button(row,"followup","Save follow-up",blocked)]}));
     if row["repro_recovery"].is_object() {
         components[3]["components"]
             .as_array_mut()
@@ -126,6 +127,9 @@ pub(super) fn receive(
     // Tokens never survive a restart. Recovery is an explicit fresh interaction.
     recover_row(row);
     if row["version"].as_u64() != Some(version) || parts[1] == "refresh" {
+        if parts[1] == "followupcommit" && v["type"] == 5 {
+            return Ok(followups::recovery("Draft changed; this follow-up was not saved. Copy the submitted fields, reopen the draft and retry.", &input_value(data,"note"), &input_value(data,"snapshot")));
+        }
         if parts[1] == "reproedited" && v["type"] == 5 {
             repro::recover(row, data)?;
             row["version"] = json!(row["version"].as_u64().unwrap_or(0) + 1);
@@ -134,11 +138,27 @@ pub(super) fn receive(
         return Ok(panel(row, 4));
     }
     if row["pending"].is_object() || row["intake_pending"] == true || row["intake_failed"] == true {
+        if parts[1] == "followupcommit" && v["type"] == 5 {
+            return Ok(followups::recovery("Draft is busy or intake failed; this follow-up was not saved. Copy the fields and retry after recovery.", &input_value(data,"note"), &input_value(data,"snapshot")));
+        }
         if parts[1] == "reproedited" && v["type"] == 5 {
             repro::recover(row, data)?;
             row["notice"] = json!("Repro edits were not applied because the draft is busy. Download recovery after it finishes.");
         }
         return Ok(panel(row, 4));
+    }
+    if parts[1] == "followupcommit" && v["type"] == 5 {
+        let draft = row.clone();
+        let mut store = state.runtime.read_document(FOLLOWUPS)?;
+        if !store["followups"].is_object() {
+            store["followups"] = json!({});
+        }
+        let before = store.clone();
+        let response = followups::save(&mut store, &draft, data)?;
+        if store != before {
+            state.runtime.write_document(FOLLOWUPS, &store)?;
+        }
+        return Ok(response);
     }
     let stashed = row["stash_complete"] == true;
     let result = match parts[1] {
@@ -188,6 +208,7 @@ pub(super) fn receive(
             row["version"] = json!(version + 1);
             panel(row, 4)
         }
+        "followup" if v["type"] == 3 => followups::save_modal(row),
         "reproedit" if v["type"] == 3 => repro::modal(row),
         "reproedited" if v["type"] == 5 => {
             repro::edit(row, data)?;

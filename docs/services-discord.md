@@ -103,3 +103,23 @@ source. Review the private Markdown before sharing. Stale submitted repro fields
 are retained separately as unapplied recovery; use **Download recovery** to copy
 them into a fresh edit. This buffer is replaced by the next stale submission.
 No itch, provider request or send is created by exporting.
+
+**Save follow-up** opens a private consent form with an optional note and the
+first 1000 UTF-16 units of source text. Review or edit both fields, including any
+HTTP(S) links, before submitting. No URLs are fetched automatically. Text may
+contain private information; it is not generally sanitized. The local bookmark
+contains the note, snapshot, source IDs and capture time, but no attachment media.
+The original intake draft retains its own source even after bookmark deletion.
+A duplicate for the same app, actor, channel, server and message returns the
+existing bookmark without replacing it; slash input uses its draft identity.
+The inbox is limited to 100 bookmarks per app/user and 1000 total without
+eviction. When full, submitted bounded input is shown privately for recovery.
+
+Use `/dumbbridge inbox:true` alone to list your bookmarks, ten per page, from any
+currently allowed channel/server or DM. Register the updated command explicitly
+from settings first. The listener and local workspace must be reachable. Select
+a bookmark to view its snapshot privately, edit its note, mark it done or reopen
+it, or delete the bookmark. The source link is reconstructed from IDs and may
+no longer be accessible. Current invocation allowlists apply; draft recovery is
+bound to its original channel and server. Stale modal submissions are shown
+privately as not saved. There are no notifications or automatic transfers.
