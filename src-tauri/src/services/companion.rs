@@ -166,7 +166,7 @@ fn bridge_configure(state: &AppState, v: &Value) -> LegacyResult<Value> {
 fn commands() -> Value {
     json!([
         {"name":"DumbBridge","type":3,"integration_types":[0,1],"contexts":[0,1,2]},
-        {"name":"dumbbridge","description":"Shape a message into an itch, research or T3 conversation.","type":1,"integration_types":[0,1],"contexts":[0,1,2],"options":[{"name":"message","description":"Idea, research question or message to T3","type":3,"required":false,"max_length":2000},{"name":"attachment","description":"Optional image or video evidence","type":11,"required":false},{"name":"draft","description":"Resume your saved draft ID in this channel","type":3,"required":false,"max_length":32}]}
+        {"name":"dumbbridge","description":"Shape a message into an itch, research or T3 conversation.","type":1,"integration_types":[0,1],"contexts":[0,1,2],"options":[{"name":"message","description":"Idea, research question or message to T3","type":3,"required":false,"max_length":2000},{"name":"attachment","description":"Optional image or video evidence","type":11,"required":false},{"name":"draft","description":"Resume your saved draft ID in this channel","type":3,"required":false,"max_length":32},{"name":"inbox","description":"Open your private follow-up inbox","type":5,"required":false}]}
     ])
 }
 fn register(state: &AppState, v: &Value) -> LegacyResult<Value> {
