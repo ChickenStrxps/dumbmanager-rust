@@ -5,6 +5,7 @@ pub mod companion;
 pub mod desktop;
 pub mod git;
 pub mod media;
+pub mod plugins;
 pub mod process;
 pub mod runtime;
 pub mod social;
@@ -53,6 +54,7 @@ pub fn dispatch(
             name if name.starts_with("ai.") => voice::handle(state, path, payload),
             name if name.starts_with("manager.media.") => media::handle(state, path, payload),
             name if name.starts_with("manager.social.") => social::handle(state, path, payload),
+            name if name.starts_with("plugins.") => Some(plugins::handle(state, payload)),
             name if name.starts_with("git.") => git::handle(state, path, payload),
             name if name.starts_with("companion.") || name.starts_with("bridge.") => {
                 companion::handle(state, path, payload)
