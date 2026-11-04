@@ -1,4 +1,5 @@
 //! Signed Discord intake. The ledger and drafts contain no interaction tokens.
+mod repro;
 mod workflows;
 use super::*;
 use ed25519_dalek::{Signature, VerifyingKey};
@@ -195,6 +196,12 @@ fn imported(state: &AppState, job: &Job, row: &mut Value) -> LegacyResult<()> {
         row["attachments"] = json!(saved);
         let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let mut ledger = state.runtime.read_document(LEDGER)?;
+        if ledger["drafts"][&job.id]["repro_recovery"].is_object() {
+            row["repro_recovery"] = ledger["drafts"][&job.id]["repro_recovery"].clone();
+        }
+        row["version"] = json!(row["version"].as_u64().unwrap_or(0).max(
+            ledger["drafts"][&job.id]["version"].as_u64().unwrap_or(0)
+        ) + 1);
         ledger["drafts"][&job.id] = row.clone();
         state.runtime.write_document(LEDGER, &ledger)?;
     }
@@ -249,6 +256,12 @@ pub(super) fn run_job(state: &AppState, job: Job) {
     let saved = (|| -> LegacyResult<()> {
         let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let mut ledger = state.runtime.read_document(LEDGER)?;
+        if ledger["drafts"][&job.id]["repro_recovery"].is_object() {
+            row["repro_recovery"] = ledger["drafts"][&job.id]["repro_recovery"].clone();
+        }
+        row["version"] = json!(row["version"].as_u64().unwrap_or(0).max(
+            ledger["drafts"][&job.id]["version"].as_u64().unwrap_or(0)
+        ) + 1);
         ledger["drafts"][&job.id] = row.clone();
         state.runtime.write_document(LEDGER, &ledger)
     })();
