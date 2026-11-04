@@ -40,6 +40,11 @@ authentication have passed using this edition's saved configuration. These check
 do not establish end-to-end delivery, phone access or microphone/audio behavior.
 No successful connection or operation is simulated.
 
+**Plugins** puts starred Dumb apps first, with project-aware MCP, API and library
+discovery, a local tool shelf and an explicit install handoff to the T3 thread in
+**Working on**. Prerequisite checks support Windows app registrations, PATH and
+custom locations. See [Plugins setup and limits](docs/plugins.md).
+
 ## Build from source
 
 Install Rust 1.90 or newer with the Windows MSVC toolchain, Microsoft C++ Build
