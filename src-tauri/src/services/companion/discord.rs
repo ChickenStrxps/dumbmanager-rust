@@ -1,4 +1,5 @@
 //! Signed Discord intake. The ledger and drafts contain no interaction tokens.
+mod followups;
 mod repro;
 mod workflows;
 use super::*;
@@ -11,6 +12,7 @@ use std::sync::{
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const LEDGER: &str = "bridge-discord-events.json";
+const FOLLOWUPS: &str = "bridge-discord-followups.json";
 static LOCK: Mutex<()> = Mutex::new(());
 static WORKERS: AtomicUsize = AtomicUsize::new(0);
 static ACTIVE: std::sync::LazyLock<Mutex<std::collections::HashSet<String>>> =
@@ -199,9 +201,13 @@ fn imported(state: &AppState, job: &Job, row: &mut Value) -> LegacyResult<()> {
         if ledger["drafts"][&job.id]["repro_recovery"].is_object() {
             row["repro_recovery"] = ledger["drafts"][&job.id]["repro_recovery"].clone();
         }
-        row["version"] = json!(row["version"].as_u64().unwrap_or(0).max(
-            ledger["drafts"][&job.id]["version"].as_u64().unwrap_or(0)
-        ) + 1);
+        row["version"] = json!(
+            row["version"]
+                .as_u64()
+                .unwrap_or(0)
+                .max(ledger["drafts"][&job.id]["version"].as_u64().unwrap_or(0))
+                + 1
+        );
         ledger["drafts"][&job.id] = row.clone();
         state.runtime.write_document(LEDGER, &ledger)?;
     }
@@ -256,12 +262,17 @@ pub(super) fn run_job(state: &AppState, job: Job) {
     let saved = (|| -> LegacyResult<()> {
         let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let mut ledger = state.runtime.read_document(LEDGER)?;
+        // Preserve a stale modal recovery submitted while this job was running.
         if ledger["drafts"][&job.id]["repro_recovery"].is_object() {
             row["repro_recovery"] = ledger["drafts"][&job.id]["repro_recovery"].clone();
         }
-        row["version"] = json!(row["version"].as_u64().unwrap_or(0).max(
-            ledger["drafts"][&job.id]["version"].as_u64().unwrap_or(0)
-        ) + 1);
+        row["version"] = json!(
+            row["version"]
+                .as_u64()
+                .unwrap_or(0)
+                .max(ledger["drafts"][&job.id]["version"].as_u64().unwrap_or(0))
+                + 1
+        );
         ledger["drafts"][&job.id] = row.clone();
         state.runtime.write_document(LEDGER, &ledger)
     })();
@@ -414,6 +425,45 @@ pub(super) fn receive(
     {
         return Err(denied());
     }
+    let data = &v["data"];
+    let inbox = v["type"] == 2
+        && data["name"] == "dumbbridge"
+        && data["options"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .any(|o| o["name"] == "inbox" && o["value"] == true);
+    let followup = (v["type"] == 3 || v["type"] == 5) && val(data, "custom_id").starts_with("fu:");
+    if inbox || followup {
+        let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let mut store = state.runtime.read_document(FOLLOWUPS)?;
+        if !store["followups"].is_object() {
+            store["followups"] = json!({});
+        }
+        if inbox {
+            if data["options"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .any(|o| ["message", "attachment", "draft"].contains(&val(o, "name")))
+            {
+                return Ok((
+                    json!({"type":4,"data":{"flags":64,"content":"Open the inbox without message, attachment or draft options. Nothing was saved or sent.","allowed_mentions":{"parse":[]}}}),
+                    None,
+                ));
+            }
+            return Ok((
+                followups::list(&store, val(&config, "application_id"), actor, 0),
+                None,
+            ));
+        }
+        let before = store.clone();
+        let response = followups::receive(&v, &config, &mut store, actor)?;
+        if store != before {
+            state.runtime.write_document(FOLLOWUPS, &store)?;
+        }
+        return Ok((response, None));
+    }
     let digest = format!("{:x}", Sha256::digest(raw));
     let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let mut ledger = state.runtime.read_document(LEDGER)?;
@@ -441,7 +491,6 @@ pub(super) fn receive(
             "Discord event ledger is full; retry shortly.",
         ));
     }
-    let data = &v["data"];
     if v["type"] == 2 && data["name"] == "dumbbridge" {
         if let Some(id) = data["options"]
             .as_array()
@@ -624,6 +673,12 @@ pub(super) fn receive(
     } else {
         return Err(LegacyError::invalid("Unsupported interaction."));
     };
+    if val(data, "custom_id").starts_with("db:followupcommit:")
+        || val(data, "custom_id").starts_with("db:followup:")
+    {
+        // Never persist the private callback in the event ledger.
+        return Ok((response, job));
+    }
     ledger["events"][event] = json!({"digest":digest,"response":response,"at":now});
     state.runtime.write_document(LEDGER, &ledger)?;
     Ok((response, job))
