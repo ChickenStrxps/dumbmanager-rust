@@ -7,7 +7,17 @@ routes retain separate authentication and origin checks. Settings show listener
 state and the last signed check for the current application/public key; this
 does not establish command registration or delivery. OpenSSL is unnecessary.
 Explicit registration upserts two named commands without removing others, using
-your encrypted bot token. Nothing registers or listens at startup.
+your encrypted bot token. Normal startup neither registers commands nor listens.
+
+For a local Discord preview without opening or focusing the desktop window, run
+`dumbmanager-rust.exe --discord-listener`. This explicit launch starts the existing
+companion listener using this installation's saved address and port, provided its
+Discord configuration is enabled and complete. It does not register commands,
+change settings, discover credentials, or install a startup task. The tray stays
+available; its Quit action stops the listener. Running this option again starts
+the listener in an already-running app without focusing its window. A normal
+launch still opens the desktop. Configure the listener and HTTPS forwarding in
+Connections first, and forward only `/interactions`.
 
 Use the message menu's **DumbBridge**, or `/dumbbridge message:` with an optional
 attachment. Replies are private and suppress mentions. Buttons bind to the exact
