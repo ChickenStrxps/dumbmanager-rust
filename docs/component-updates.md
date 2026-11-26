@@ -68,8 +68,8 @@ the app range. Supported comparison operators are `=`, `<`, `<=`, `>`, and
 ~~~
 
 Run `python tools/component_feed.py spec.json --key feed-key.pem --output feed.json`
-with OpenSSL 3 on the signing machine. Use `--openssl` when the executable
-is outside PATH. The tool checks the archive bytes against the build report,
-signs the feed, and creates a new JSON output file. Keep the private key on
-the signing machine and provide the trusted public key through the app's
-distribution configuration.
+with Python 3.11 or later and OpenSSL 3 on the signing machine. Use `--openssl`
+when the executable is outside PATH. The tool checks the archive bytes against
+the build report, signs the feed, and creates a new JSON output file. Keep the
+private key on the signing machine and provide the trusted public key through
+the app's distribution configuration.

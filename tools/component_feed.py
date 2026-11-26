@@ -44,17 +44,39 @@ def app_range(value):
     return True
 
 
-def valid_host(host):
+def valid_host(host, authority):
     if "%" in host:
         return False
+    bracketed = authority.startswith("[")
+    if bracketed and not re.fullmatch(r"\[[^\]]+\](?::[0-9]*)?", authority):
+        return False
     try:
-        ip_address(host)
-        return True
+        return ip_address(host).version == (6 if bracketed else 4)
     except ValueError:
-        names = host.removesuffix(".").split(".")
-        return len(host) <= 253 and names[-1][:1].isalpha() and all(
-            DNS_LABEL.fullmatch(name) for name in names
-        )
+        if bracketed:
+            return False
+    names = host.removesuffix(".").split(".")
+    if (len(host) > 253 or not names[-1][:1].isalpha()
+            or not all(DNS_LABEL.fullmatch(name) for name in names)):
+        return False
+    try:
+        host.encode("ascii").decode("idna")
+    except UnicodeError:
+        return False
+    return True
+
+
+def valid_artifact_url(url):
+    if (not isinstance(url, str) or any(mark in url for mark in "?#\\")
+            or any(ord(char) < 32 or char.isspace() for char in url)):
+        return False
+    try:
+        parsed = urlsplit(url)
+        return (parsed.scheme == "https" and parsed.hostname is not None
+                and parsed.username is None and parsed.port != 0
+                and valid_host(parsed.hostname, parsed.netloc))
+    except ValueError:
+        return False
 
 
 def load(path):
@@ -71,7 +93,7 @@ def release(spec, directory):
         raise ValueError("invalid component or stable package version")
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", artifact):
         raise ValueError("artifact file must be a plain filename")
-    if not contracts or any(
+    if not isinstance(contracts, dict) or not contracts or any(
         not re.fullmatch(r"[a-z0-9-]{1,64}", name) or type(major) is not int or not 0 < major < 2**32
         for name, major in contracts.items()
     ):
@@ -86,10 +108,7 @@ def release(spec, directory):
         if file_digest(file, "sha256").hexdigest() != digest:
             raise ValueError(f"artifact hash does not match the build report for {component}")
     target, app, url = spec["target"], spec["app"], spec["url"]
-    parsed = urlsplit(url)
-    if (parsed.scheme != "https" or not parsed.hostname or not valid_host(parsed.hostname)
-            or parsed.username is not None or parsed.port == 0
-            or parsed.query or parsed.fragment or "\\" in url or any(char.isspace() for char in url)):
+    if not valid_artifact_url(url):
         raise ValueError("use an authorized HTTPS artifact URL without credentials, query or fragment")
     if target not in TARGETS or not app_range(app):
         raise ValueError("provide a supported target and an app range using * or up to eight stable version comparators")

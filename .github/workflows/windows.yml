@@ -44,6 +44,10 @@ jobs:
         run: node --test tests/native-shortcuts.test.cjs
       - name: Check plugin package and shelf boundaries
         run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib services::plugins::tests
+      - name: Check component feed signer inputs
+        run: python -m unittest discover -s tools -p test_component_feed.py
+      - name: Check signed component feeds
+        run: cargo test --manifest-path src-tauri/core/Cargo.toml --target-dir src-tauri/target --test component_updates
       - name: Check Rust warnings
         run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --lib --bins -- -D warnings
       - name: Check Rust formatting
