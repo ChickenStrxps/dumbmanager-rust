@@ -1032,10 +1032,15 @@ dependencies = [
 name = "dumbmanager-core"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
+ "ed25519-dalek",
  "rusqlite",
+ "semver",
  "serde",
  "serde_json",
+ "sha2",
  "thiserror 2.0.21",
+ "url",
  "uuid",
 ]
 

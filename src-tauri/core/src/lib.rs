@@ -10,6 +10,7 @@
 //! - a database that belongs to another application is refused, untouched;
 //! - nothing in this crate opens sockets, spawns processes or reads tokens.
 
+pub mod component_updates;
 pub mod error;
 pub mod export;
 pub mod integrations;
