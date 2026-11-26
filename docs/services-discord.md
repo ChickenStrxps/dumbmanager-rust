@@ -92,3 +92,14 @@ a later itch version. When the exact key has no committed run, the bridge retain
 its frozen question, reconciles the current itch version and persists that
 preparation before retrying. The external fixture checked native edits, a newer
 unrelated run, stale-version retries and an interrupted missing preparation.
+
+**Edit repro brief** maintains five optional fields: title, environment, expected,
+observed and steps. Use Observed for logs and Steps for detailed reproduction.
+Source is omitted by default. **Include source** opts in to captured text, source
+link and sanitized attachment filename, type and size; no attachment media or
+attachment links are included. Text and links may contain private identifiers or
+other sensitive information. **Omit source** removes all automatically included
+source. Review the private Markdown before sharing. Stale submitted repro fields
+are retained separately as unapplied recovery; use **Download recovery** to copy
+them into a fresh edit. This buffer is replaced by the next stale submission.
+No itch, provider request or send is created by exporting.

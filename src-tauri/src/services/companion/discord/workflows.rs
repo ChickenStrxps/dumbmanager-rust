@@ -6,6 +6,15 @@ pub(super) fn call(state: &AppState, name: &str, args: Value, target: &str) -> L
         &json!({"name":name,"args":args,"t3_target":target}),
     )
 }
+fn truncate_utf16(text: &str, limit: usize) -> String {
+    let mut used = 0;
+    text.chars()
+        .take_while(|c| {
+            used += c.len_utf16();
+            used <= limit
+        })
+        .collect()
+}
 fn button(row: &Value, action: &str, label: &str, disabled: bool) -> Value {
     json!({"type":2,"style":if action=="confirm"{4}else{2},"label":label,"custom_id":format!("db:{action}:{}:{}",val(row,"id"),row["version"].as_u64().unwrap_or(0)),"disabled":disabled})
 }
@@ -40,11 +49,20 @@ pub(super) fn panel(row: &Value, kind: u8) -> Value {
     }
     let blocked = busy || row["intake_failed"] == true;
     let components = json!([
-        {"type":1,"components":[button(row,"edit","Edit",blocked||stashed),button(row,"destination","Choose destination",blocked||row["frozen"].is_object()),button(row,"save",if !val(row,"itch_id").is_empty() || row["capture_request"].is_object(){"Recover stash"}else{"Stash"},blocked||row["stash_complete"]==true),button(row,"refresh","Refresh",false),button(row,"discard","Discard draft",blocked||row["frozen"]["status"]=="unconfirmed")]},
+        {"type":1,"components":[button(row,"edit","Edit",blocked||stashed),button(row,"destination","Choose destination",blocked||row["frozen"].is_object()),button(row,"save",if !val(row,"itch_id").is_empty() || row["capture_request"].is_object(){"Recover stash"}else{"Stash"},blocked||row["stash_complete"]==true),button(row,if row["choices"].is_object() && !row["frozen"].is_object() {"clearchoices"} else {"refresh"},if row["choices"].is_object() && !row["frozen"].is_object() {"Hide choices"} else {"Refresh"},false),button(row,"discard","Discard draft",blocked||row["frozen"]["status"]=="unconfirmed")]},
         {"type":1,"components":[button(row,"help","Structure with Mercury",blocked||stashed),button(row,"adopt","Adopt proposal",blocked||stashed||!row["proposal"].is_object()),button(row,"related","Related with Jev",blocked),button(row,"research","Research with Jev",blocked||!stashed),button(row,if row["research"]["report"].is_object(){"readresearch"}else{"readproposal"},if row["research"]["report"].is_object(){"Read research"}else{"Read proposal"},blocked||(!row["proposal"].is_object()&&!row["research"]["report"].is_object()))]},
         {"type":1,"components":[button(row,"preview","Preview T3 send",blocked||!stashed||val(row,"thread_id").is_empty()||row["frozen"].is_object()),button(row,"confirm",if row["frozen"]["status"]=="unconfirmed"{"Recover same send"}else{"Confirm T3 send"},blocked||!row["frozen"].is_object()||row["frozen"]["status"]=="confirmed"),button(row,"card","ASCII card",blocked),button(row,"cancelpreview","Cancel preview",blocked||row["frozen"]["status"]!="previewed"),button(row,"readpreview","Read preview",blocked||!row["frozen"].is_object())]}
     ]);
-    let mut data = json!({"content":content.chars().take(1950).collect::<String>(),"allowed_mentions":{"parse":[]},"components":components});
+    let mut components = components;
+    components.as_array_mut().unwrap().push(json!({"type":1,"components":[button(row,"reproedit","Edit repro brief",blocked),button(row,"reprosource",if row["repro"]["include_source"] == true {"Omit source"} else {"Include source"},blocked),button(row,"reprofile","Preview / export .md",blocked)]}));
+    if row["repro_recovery"].is_object() {
+        components[3]["components"]
+            .as_array_mut()
+            .unwrap()
+            .push(button(row, "reprorecover", "Download recovery", blocked));
+    }
+    content.push_str(&format!("\nRepro brief: source {}. Edit fields, then read the complete private .md before sharing. No itch or send is created.", if row["repro"]["include_source"] == true {"included (review file)"} else {"omitted"}));
+    let mut data = json!({"content":truncate_utf16(&content, 1950),"allowed_mentions":{"parse":[]},"components":components});
     add_choices(row, &mut data);
     if kind == 4 {
         data["flags"] = json!(64);
@@ -108,9 +126,18 @@ pub(super) fn receive(
     // Tokens never survive a restart. Recovery is an explicit fresh interaction.
     recover_row(row);
     if row["version"].as_u64() != Some(version) || parts[1] == "refresh" {
+        if parts[1] == "reproedited" && v["type"] == 5 {
+            repro::recover(row, data)?;
+            row["version"] = json!(row["version"].as_u64().unwrap_or(0) + 1);
+            row["notice"] = json!("Stale repro edits were not applied. Download the private recovery file to copy them.");
+        }
         return Ok(panel(row, 4));
     }
     if row["pending"].is_object() || row["intake_pending"] == true || row["intake_failed"] == true {
+        if parts[1] == "reproedited" && v["type"] == 5 {
+            repro::recover(row, data)?;
+            row["notice"] = json!("Repro edits were not applied because the draft is busy. Download recovery after it finishes.");
+        }
         return Ok(panel(row, 4));
     }
     let stashed = row["stash_complete"] == true;
@@ -120,6 +147,11 @@ pub(super) fn receive(
             return Ok(
                 json!({"type":4,"data":{"flags":64,"content":"Bridge draft discarded. Any stashed itch and imported evidence remain in DumbManager.","allowed_mentions":{"parse":[]}}}),
             );
+        }
+        "clearchoices" if v["type"] == 3 && !row["frozen"].is_object() => {
+            row["choices"] = Value::Null;
+            row["version"] = json!(version + 1);
+            panel(row, 4)
         }
         "cancelpreview" if v["type"] == 3 && row["frozen"]["status"] == "previewed" => {
             row["frozen"] = Value::Null;
@@ -156,6 +188,32 @@ pub(super) fn receive(
             row["version"] = json!(version + 1);
             panel(row, 4)
         }
+        "reproedit" if v["type"] == 3 => repro::modal(row),
+        "reproedited" if v["type"] == 5 => {
+            repro::edit(row, data)?;
+            row["version"] = json!(version + 1);
+            row["notice"] =
+                json!("Repro fields saved separately. Preview the complete file before sharing.");
+            panel(row, 4)
+        }
+        "reprosource" if v["type"] == 3 => {
+            let include = row["repro"]["include_source"] != true;
+            if !row["repro"].is_object() {
+                row["repro"] = json!({});
+            }
+            row["repro"]["include_source"] = json!(include);
+            row["version"] = json!(version + 1);
+            row["notice"] = json!(if include {
+                "Source selected. Review the complete private file; it contains captured text, source link and safe attachment filename, type and size. Text and links may contain private information."
+            } else {
+                "Source omitted from the repro file."
+            });
+            panel(row, 4)
+        }
+        "reprorecover" if v["type"] == 3 && row["repro_recovery"].is_object() => {
+            queue(v, config, row, "reprorecover", json!({}), job)?
+        }
+        "reprofile" if v["type"] == 3 => queue(v, config, row, "reprofile", json!({}), job)?,
         "destination" if v["type"] == 3 && !row["frozen"].is_object() => modal(
             row,
             "searched",
@@ -404,6 +462,14 @@ pub(super) fn perform(
     row: &mut Value,
 ) -> LegacyResult<Option<crate::services::browser::BridgeCard>> {
     match job.action.as_str() {
+        "reprorecover" => {
+            row["notice"] = json!("Private recovery file attached. These edits were not applied; copy the desired text into a fresh edit.");
+            return Ok(Some(repro::recovery_file(row)));
+        }
+        "reprofile" => {
+            row["notice"] = json!("Private Markdown preview attached. Review all contents before sharing. No itch or send was created. If delivery expired, reopen this draft and export again.");
+            return Ok(Some(repro::file(row)));
+        }
         "save" => {
             stash(state, row)?;
             if state
@@ -632,11 +698,15 @@ pub(super) fn reply(row: &Value) -> Value {
 fn add_choices(row: &Value, data: &mut Value) {
     if row["choices"].is_object() && !row["frozen"].is_object() {
         let mut rows = data["components"].as_array().cloned().unwrap_or_default();
+        // The two destination selects need the last two Discord rows.
+        if rows.len() == 4 {
+            rows.pop();
+        }
         for (group, action, label) in [
             ("projects", "project", "Choose project"),
             ("threads", "thread", "Choose T3 thread"),
         ] {
-            let options:Vec<Value>=row["choices"][group].as_array().into_iter().flatten().take(25).map(|x|json!({"label":val(x,if action=="project"{"name"}else{"title"}).chars().take(95).collect::<String>(),"value":x["id"],"description":val(x,"id").chars().take(95).collect::<String>()})).collect();
+            let options:Vec<Value>=row["choices"][group].as_array().into_iter().flatten().take(25).map(|x|json!({"label":truncate_utf16(val(x,if action=="project"{"name"}else{"title"}),95),"value":x["id"],"description":truncate_utf16(val(x,"id"),95)})).collect();
             if !options.is_empty() {
                 rows.push(json!({"type":1,"components":[{"type":3,"custom_id":format!("db:{action}:{}:{}",val(row,"id"),row["version"].as_u64().unwrap_or(0)),"placeholder":label,"options":options}]}));
             }
