@@ -130,3 +130,29 @@ fn windows_specific_package_wins_a_same_version_tie() {
         assert!(candidate.url().ends_with(suffix));
     }
 }
+
+#[test]
+fn accepts_the_openssl_feed_producer_fixture() {
+    let fixture: Value = serde_json::from_str(include_str!("component_feed.fixture.json")).unwrap();
+    let public_key = STANDARD
+        .decode(fixture["public_key"].as_str().unwrap())
+        .unwrap();
+    let key = ed25519_dalek::VerifyingKey::from_bytes(&public_key.try_into().unwrap()).unwrap();
+    let feed = VerifiedFeed::verify(fixture["feed"].to_string().as_bytes(), &key, 0).unwrap();
+    assert_eq!(feed.sequence(), 17);
+    let contracts = [("draft".to_owned(), 1), ("labels".to_owned(), 1)].into();
+    let result = feed.select(
+        Component::Dumbissues,
+        &Version::new(0, 1, 0),
+        Target::WindowsX86_64,
+        Installed {
+            enabled: true,
+            version: None,
+            supported_contracts: &contracts,
+        },
+    );
+    let Availability::Update(release) = result else {
+        panic!("expected update")
+    };
+    assert_eq!(release.verify_artifact(BUNDLE), Ok(()));
+}

@@ -1,0 +1,7 @@
+{
+  "public_key": "58BeTsNwghvWjKpC6DwJp/ZasvrhBGePnDm5+PjuzDI=",
+  "feed": {
+    "payload": "eyJyZWxlYXNlcyI6W3siYXBwIjoiPj0wLjEuMCwgPDAuMi4wIiwiY29tcG9uZW50IjoiZHVtYmlzc3VlcyIsImNvbnRyYWN0cyI6eyJkcmFmdCI6MSwibGFiZWxzIjoxfSwic2hhMjU2IjoiMzY1ZmUxMzgzZmQ4NWViMWY2OGJmMTE4NGI0MWQ3MWVmZDVjYmIwMGI1MmFlODc0NWMyNWEwZmMzZDg2NDc1MyIsInNpemUiOjE0LCJ0YXJnZXQiOiJhbnkiLCJ1cmwiOiJodHRwczovL2V4YW1wbGUudGVzdC9kdW1iaXNzdWVzLnppcCIsInZlcnNpb24iOiIwLjEuMCJ9XSwic2NoZW1hIjoxLCJzZXF1ZW5jZSI6MTd9",
+    "signature": "PxS6+9vgY5QdTlCL4V454IYtlkczQEoBK4Iu6RIjh51Qd5rjqRFXev3CLZUcTC1MrB5Ri3nYn/VWlCvu6BoZBA=="
+  }
+}

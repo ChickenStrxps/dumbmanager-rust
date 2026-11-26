@@ -44,3 +44,32 @@ Run the fixture checks without an installed app, network, or signing secrets.
 ~~~sh
 cargo test --manifest-path src-tauri/core/Cargo.toml --test component_updates
 ~~~
+
+## Prepare a signed feed
+
+Each component builds its own archive and emits a build report containing
+`component`, `version`, `contracts`, `file`, `size`, and `sha256`. Keep a
+report next to its archive. Create a feed specification that names the reports
+and sets their desktop compatibility and authorized download locations.
+Use `*` or comma-separated comparisons against complete stable versions for
+the app range. Supported comparison operators are `=`, `<`, `<=`, `>`, and
+`>=`.
+
+~~~json
+{
+  "sequence": 1,
+  "releases": [{
+    "build": "dumbissues-build.json",
+    "app": ">=0.1.0, <0.2.0",
+    "target": "any",
+    "url": "https://updates.example.org/dumbissues-0.1.0.zip"
+  }]
+}
+~~~
+
+Run `python tools/component_feed.py spec.json --key feed-key.pem --output feed.json`
+with OpenSSL 3 on the signing machine. Use `--openssl` when the executable
+is outside PATH. The tool checks the archive bytes against the build report,
+signs the feed, and creates a new JSON output file. Keep the private key on
+the signing machine and provide the trusted public key through the app's
+distribution configuration.
